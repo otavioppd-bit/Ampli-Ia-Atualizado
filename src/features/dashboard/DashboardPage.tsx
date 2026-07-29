@@ -1,30 +1,9 @@
 import { useEffect, useMemo } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { getSSCColor, getSSCLabel } from '../../shared/lib/sscCalculator';
-import { DailyPlan, MoodType, QuizResult } from '../../shared/types';
+import { DailyPlan, QuizResult } from '../../shared/types';
 import { IconMoon, IconSparkles, IconBarChart, IconClock, IconTarget, IconBookOpen } from '../../shared/ui/Icons';
-
-function getToday(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
-const moodLabel: Record<string, string> = {
-  stress: 'Estressado', anxiety: 'Ansioso', sadness: 'Triste', tired: 'Cansado',
-  demotivated: 'Desmotivado', focused: 'Focado', motivated: 'Motivado',
-  happy: 'Feliz', energetic: 'Energético', neutral: 'Tranquilo',
-};
-
-const moodEmoji: Record<string, string> = {
-  stress: '😰', anxiety: '😟', sadness: '😢', tired: '😴',
-  demotivated: '😞', focused: '🎯', motivated: '🚀',
-  happy: '😊', energetic: '⚡', neutral: '😌',
-};
-
-const moodBarColors: Record<string, string> = {
-  stress: '#ef4444', anxiety: '#f59e0b', sadness: '#a855f7', tired: '#a855f7',
-  demotivated: '#a855f7', focused: '#10b981', motivated: '#10b981',
-  happy: '#10b981', energetic: '#10b981', neutral: '#475569',
-};
+import { getToday, MOOD_LABEL, MOOD_EMOJI, MOOD_COLOR } from '../../shared/lib/utils';
 
 export function DashboardPage() {
   const {
@@ -79,9 +58,9 @@ export function DashboardPage() {
             <span className="text-[11px] text-gray-500 uppercase tracking-wider font-medium">Humor</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-2xl">{moodEmoji[currentMood] || '😌'}</span>
-            <div>
-              <p className="text-xl font-bold text-white">{moodLabel[currentMood] || 'Tranquilo'}</p>
+          <span className="text-2xl">{MOOD_EMOJI[currentMood] || '😌'}</span>
+          <div>
+            <p className="text-xl font-bold text-white">{MOOD_LABEL[currentMood] || 'Tranquilo'}</p>
               <p className="text-xs text-gray-500">Detectado nas conversas</p>
             </div>
           </div>
@@ -368,14 +347,7 @@ function MoodMiniGraph() {
     happy: 'Alegria', energetic: 'Energia', neutral: 'Neutro',
   };
 
-  const colorMap: Record<string, string> = {
-    stress: '#ef4444', anxiety: '#f59e0b', sadness: '#a855f7', tired: '#a855f7',
-    demotivated: '#a855f7', focused: '#10b981', motivated: '#10b981',
-    happy: '#10b981', energetic: '#10b981', neutral: '#475569',
-  };
-
   const bars = useMemo(() => {
-    const groups: { mood: string; count: number }[] = [];
     const freq: Record<string, number> = {};
     for (const e of recent) {
       freq[e.mood] = (freq[e.mood] || 0) + 1;
@@ -394,8 +366,8 @@ function MoodMiniGraph() {
             key={i}
             className="flex-1 rounded-t-sm transition-all duration-300 hover:opacity-80 hover:scale-y-110 origin-bottom cursor-pointer relative group"
             style={{
-              backgroundColor: colorMap[entry.mood] || '#475569',
-              height: `${25 + (Object.values(moodBarColors).indexOf(colorMap[entry.mood] || '#475569') / Object.keys(moodBarColors).length) * 40}%`,
+              backgroundColor: MOOD_COLOR[entry.mood] || '#475569',
+              height: `${25 + (Object.values(MOOD_COLOR).indexOf(MOOD_COLOR[entry.mood] || '#475569') / Object.keys(MOOD_COLOR).length) * 40}%`,
               minHeight: '8px',
             }}
             title={`${moodLabels[entry.mood] || entry.mood} — ${new Date(entry.timestamp).toLocaleTimeString()}`}

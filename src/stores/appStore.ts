@@ -6,6 +6,7 @@ import { generatePlan, XP_PER_TASK } from '../shared/lib/plannerEngine';
 import { userRepository } from '../shared/storage/UserRepository';
 import { supabaseRepository } from '../shared/storage/SupabaseRepository';
 import { isSupabaseConfigured } from '../shared/lib/supabase';
+import { calcLevel, getToday } from '../shared/lib/utils';
 
 interface AppState {
   session: Session | null;
@@ -82,20 +83,6 @@ interface AppState {
   updateGamification: (g: Partial<GamificationState>) => void;
   setChatMessages: (msgs: ChatMessage[]) => void;
   setLogs: (logs: LogEntry[]) => void;
-}
-
-function calcLevel(xp: number): { level: number; remainder: number } {
-  let level = 1;
-  let remainder = xp;
-  while (remainder >= 100 * level) {
-    remainder -= 100 * level;
-    level++;
-  }
-  return { level, remainder };
-}
-
-function getToday(): string {
-  return new Date().toISOString().split('T')[0];
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -203,7 +190,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   addXP: (n) => {
     set((s) => {
       const newXp = s.gamification.xp + n;
-      const { level, remainder } = calcLevel(newXp);
+      const { level } = calcLevel(newXp);
       const leveledUp = level > s.gamification.level;
       return {
         gamification: { ...s.gamification, xp: newXp, level, streak: s.gamification.streak },
@@ -287,7 +274,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({ notas: [nota, ...s.notas] }));
     supabaseRepository.saveNota(nota).catch(() => {});
   },
-  updateGamification: (g) => set((s) => ({ gamification: { ...s.gamification, ...g } })),
+  updateGamification: (g) => set((s) => {
+    const merged = { ...s.gamification, ...g };
+    if (g.xp !== undefined) {
+      const { level } = calcLevel(merged.xp);
+      merged.level = level;
+    }
+    return { gamification: merged };
+  }),
   setChatMessages: (msgs) => set({ chatMessages: msgs }),
   setLogs: (logs) => set({ logs }),
 }));

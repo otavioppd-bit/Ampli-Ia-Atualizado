@@ -8,15 +8,13 @@ import { AppShell } from './app/AppShell';
 import { ParticleCanvas } from './features/atmo/ParticleCanvas';
 import { Toast } from './shared/ui/Toast';
 import { OnboardingTour } from './shared/ui/OnboardingTour';
-import { GamificationState, LogEntry, Nota, ChatMessage, ChatPersona } from './shared/types';
-
-function getToday(): string {
-  return new Date().toISOString().split('T')[0];
-}
+import { GamificationState, Nota, ChatMessage, ChatPersona } from './shared/types';
+import { getToday } from './shared/lib/utils';
 
 export default function App() {
   const { isAuthenticated, setSession, updateGamification, setLogs, setNotas, setChatMessages, setPersonas, setActivePersonaId, setApiKey, gamification } = useAppStore();
   const { session } = useAppStore();
+  const logs = useAppStore(s => s.logs);
 
   // Restore session + load data from Supabase if connected
   useEffect(() => {
@@ -98,9 +96,8 @@ export default function App() {
   // Persist logs
   useEffect(() => {
     if (!isAuthenticated) return;
-    const logs = useAppStore.getState().logs;
     localStorage.setItem('mm_logs', JSON.stringify(logs));
-  }, [isAuthenticated, useAppStore.getState().logs]);
+  }, [isAuthenticated, logs]);
 
   if (!isAuthenticated) {
     return (

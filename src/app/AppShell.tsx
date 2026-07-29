@@ -13,6 +13,7 @@ import { CrisisOverlay } from '../features/overlays/CrisisOverlay';
 import { WeeklyReportModal } from '../features/overlays/WeeklyReportModal';
 import { NotebookStudioModal } from '../features/overlays/NotebookStudioModal';
 import { IconHome, IconBrain, IconEdit, IconNotebook, IconTarget, IconUser, IconTrophy, IconClock, IconMoon, IconLogOut, IconUsersGroup } from '../shared/ui/Icons';
+import { calcLevel } from '../shared/lib/utils';
 
 const TABS: { id: TabId; label: string; icon: typeof IconHome }[] = [
   { id: 'dashboard', label: 'Central', icon: IconHome },
@@ -25,16 +26,6 @@ const TABS: { id: TabId; label: string; icon: typeof IconHome }[] = [
   { id: 'notebook', label: 'Caderno', icon: IconNotebook },
   { id: 'profile', label: 'Perfil', icon: IconUser },
 ];
-
-function calcLevel(xp: number): { level: number; remainder: number } {
-  let level = 1;
-  let remainder = xp;
-  while (remainder >= 100 * level) {
-    remainder -= 100 * level;
-    level++;
-  }
-  return { level, remainder };
-}
 
 export function AppShell() {
   const { activeTab, setActiveTab, session, logout, gamification } = useAppStore();
