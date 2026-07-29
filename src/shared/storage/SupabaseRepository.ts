@@ -1,5 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
-import type { Session, GamificationState, LogEntry, ChatMessage, Nota, ChatPersona, QuizResult } from '../types';
+import type { GamificationState, LogEntry, Nota, ChatPersona, QuizResult } from '../types';
 
 export class SupabaseRepository {
   private get userId(): string | null {

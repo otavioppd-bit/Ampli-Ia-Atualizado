@@ -1,4 +1,5 @@
 import type { Escola, Turma, RankingEntry, RankingFilter, RankingData, UserProfile } from '../types';
+import { getSupabase, isSupabaseConfigured } from './supabase';
 
 // === Escolas demo simuladas ===
 export const ESCOLAS: Escola[] = [
@@ -58,14 +59,6 @@ function gerarNickname(seed: number): string {
   const emoji = EMOJIS_RANKING[Math.floor(seedRandom(seed + 100) * EMOJIS_RANKING.length)];
   const num = Math.floor(seedRandom(seed + 150) * 99) + 1;
   return `${emoji} ${animal}${adj}${num}`;
-}
-
-function gerarXpMock(): number {
-  return Math.floor(Math.random() * 5000) + 200;
-}
-
-function gerarStreakMock(): number {
-  return Math.floor(Math.random() * 30) + 1;
 }
 
 function nivelPorXp(xp: number): number {
@@ -197,7 +190,6 @@ async function gerarRankingSupabase(
   filter: RankingFilter,
   userProfile: UserProfile,
 ): Promise<RankingEntry[]> {
-  const { getSupabase, isSupabaseConfigured } = await import('./supabase');
   if (!isSupabaseConfigured()) return [];
 
   const sb = getSupabase();
@@ -263,7 +255,6 @@ export async function getRankingData(
   userStreak: number,
 ): Promise<RankingData> {
   const profile = getProfile(uid);
-  const { isSupabaseConfigured } = await import('./supabase');
 
   let entries: RankingEntry[];
 

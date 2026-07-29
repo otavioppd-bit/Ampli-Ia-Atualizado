@@ -325,6 +325,12 @@ function MoodMiniGraph() {
   const moodHistory = useAppStore(s => s.moodHistory);
   const recent = moodHistory.slice(-24);
 
+  const moodLabels: Record<string, string> = {
+    stress: 'Estresse', anxiety: 'Ansiedade', sadness: 'Tristeza', tired: 'Cansaço',
+    demotivated: 'Desmotivação', focused: 'Foco', motivated: 'Motivação',
+    happy: 'Alegria', energetic: 'Energia', neutral: 'Neutro',
+  };
+
   const timeline = useMemo(() => {
     if (recent.length === 0) return [];
     const entries = [...recent];
@@ -340,22 +346,6 @@ function MoodMiniGraph() {
   if (recent.length === 0) {
     return <p className="text-sm text-gray-500 text-center py-4">Converse com o Mentor para gerar registros emocionais.</p>;
   }
-
-  const moodLabels: Record<string, string> = {
-    stress: 'Estresse', anxiety: 'Ansiedade', sadness: 'Tristeza', tired: 'Cansaço',
-    demotivated: 'Desmotivação', focused: 'Foco', motivated: 'Motivação',
-    happy: 'Alegria', energetic: 'Energia', neutral: 'Neutro',
-  };
-
-  const bars = useMemo(() => {
-    const freq: Record<string, number> = {};
-    for (const e of recent) {
-      freq[e.mood] = (freq[e.mood] || 0) + 1;
-    }
-    return Object.entries(freq)
-      .map(([mood, count]) => ({ mood, count, pct: count / recent.length }))
-      .sort((a, b) => b.count - a.count);
-  }, [recent]);
 
   return (
     <div className="space-y-3">

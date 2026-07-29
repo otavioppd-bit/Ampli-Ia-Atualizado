@@ -3,7 +3,6 @@ import { useAppStore } from '../../stores/appStore';
 import { userRepository } from '../../shared/storage/UserRepository';
 import { getProfile, saveProfile, getEscolasCadastradas, getTurmasCadastradas, salvarEscola, salvarTurma } from '../../shared/lib/rankingEngine';
 import type { Escola, Turma } from '../../shared/types';
-import { IconSparkles } from '../../shared/ui/Icons';
 
 export function ProfilePage() {
   const { session, logout, setShowWeeklyReport, gamification, apiKey, setApiKey, setToast } = useAppStore();

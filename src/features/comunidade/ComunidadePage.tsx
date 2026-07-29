@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { getProfile, getEscolasCadastradas, getTurmasCadastradas } from '../../shared/lib/rankingEngine';
-import { moderar, MATERIAS_COMUNIDADE } from '../../shared/lib/moderationEngine';
+import { moderar } from '../../shared/lib/moderationEngine';
 import { getSupabase, isSupabaseConfigured } from '../../shared/lib/supabase';
 import type { CommunityMessage, Escola, Turma } from '../../shared/types';
 import { createStudyLeague, joinLeague, normalizeStudyLeague, postLeagueMessage, toggleGoalCompletion, type StudyLeague } from '../../shared/lib/ligasEngine';
-import { IconSend, IconUsersGroup, IconFilter, IconShield, IconSparkles, IconCheck, IconTarget, IconTrendingUp } from '../../shared/ui/Icons';
+import { IconSend, IconUsersGroup, IconSparkles } from '../../shared/ui/Icons';
 
 function gerarId() { return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`; }
 
@@ -70,9 +70,8 @@ export function ComunidadePage() {
   const { session, addXP, addLog } = useAppStore();
   const [mensagens, setMensagens] = useState<CommunityMessage[]>([]);
   const [input, setInput] = useState('');
-  const [materia, setMateria] = useState('Geral');
+  const [materia] = useState('Geral');
   const [modError, setModError] = useState('');
-  const [sending, setSending] = useState(false);
   const [escolas, setEscolas] = useState<Escola[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [ligas, setLigas] = useState<StudyLeague[]>([]);
@@ -164,7 +163,7 @@ export function ComunidadePage() {
     return () => clearInterval(interval);
   }, [profile?.turmaId]);
 
-  const enviarMensagem = useCallback(async () => {
+  const _enviarMensagem = useCallback(async () => {
     if (!input.trim() || !profile || !profile.turmaId || !profile.escolaId) return;
 
     const resultado = moderar(input);
@@ -174,7 +173,6 @@ export function ComunidadePage() {
       return;
     }
 
-    setSending(true);
     const novaMsg: CommunityMessage = {
       id: gerarId(),
       escolaId: profile.escolaId,
@@ -216,32 +214,7 @@ export function ComunidadePage() {
     }
 
     setInput('');
-    setSending(false);
   }, [input, profile, mensagens, materia]);
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      enviarMensagem();
-    }
-  }
-
-  function curtir(msgId: string) {
-    if (!profile) return;
-    const updated = mensagens.map(m => {
-      if (m.id !== msgId) return m;
-      const liked = m.likedBy?.includes(profile.uid) || false;
-      return {
-        ...m,
-        likes: (m.likes || 0) + (liked ? -1 : 1),
-        likedBy: liked
-          ? (m.likedBy || []).filter(u => u !== profile.uid)
-          : [...(m.likedBy || []), profile.uid],
-      };
-    });
-    setMensagens(updated);
-    if (profile.turmaId) salvarMensagensLocal(profile.turmaId, updated);
-  }
 
   function aceitarLiga(liga: StudyLeague) {
     if (!profile?.uid) return;

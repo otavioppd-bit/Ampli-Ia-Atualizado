@@ -8,7 +8,7 @@ import { AppShell } from './app/AppShell';
 import { ParticleCanvas } from './features/atmo/ParticleCanvas';
 import { Toast } from './shared/ui/Toast';
 import { OnboardingTour } from './shared/ui/OnboardingTour';
-import { GamificationState, Nota, ChatMessage, ChatPersona } from './shared/types';
+import { GamificationState, ChatPersona } from './shared/types';
 import { getToday } from './shared/lib/utils';
 
 export default function App() {
@@ -25,7 +25,7 @@ export default function App() {
 
         if (isSupabaseConfigured()) {
           try {
-            const [gam, logs, notas, quizResults, personas] = await Promise.all([
+            const [gam, logs, notas, _quizResults, personas] = await Promise.all([
               supabaseRepository.loadGamification(),
               supabaseRepository.loadLogs(),
               supabaseRepository.loadNotas(),

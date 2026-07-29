@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../../stores/appStore';
-import { IconClock, IconTrophy, IconTrendingUp } from '../../shared/ui/Icons';
+import { IconClock } from '../../shared/ui/Icons';
 
 type FocoState = 'idle' | 'foco' | 'pausa' | 'concluido';
 const FOCO_MIN = 25;
@@ -14,7 +14,6 @@ export function FocoPage() {
   const [historico, setHistorico] = useState<{ tipo: string; data: number; duracao: number }[]>([]);
   const [sessoesHoje, setSessoesHoje] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const somRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     try {
@@ -110,7 +109,6 @@ export function FocoPage() {
 
   const totalMin = state === 'foco' || (state === 'concluido' && cicles > 0) ? FOCO_MIN : state === 'pausa' ? PAUSA_MIN : FOCO_MIN;
   const progresso = state === 'idle' ? 0 : ((totalMin * 60 - segundos) / (totalMin * 60)) * 100;
-  const isRunning = state === 'foco' || state === 'pausa';
 
   // Stats
   const totalFocoMin = historico.filter(h => h.tipo === 'foco').reduce((acc, h) => acc + h.duracao, 0) / 60;

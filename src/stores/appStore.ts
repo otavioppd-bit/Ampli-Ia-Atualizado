@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { MoodType, TabId, GamificationState, ChatMessage, Nota, LogEntry, DailyPlan, EssayCorrection, QuizResult, Session, ChatPersona } from '../shared/types';
-import { calculateSSC, getSSCLevel } from '../shared/lib/sscCalculator';
+import { calculateSSC } from '../shared/lib/sscCalculator';
 import { detectEmotion, getMoodColor } from '../shared/lib/emotionEngine';
 import { generatePlan, XP_PER_TASK } from '../shared/lib/plannerEngine';
 import { userRepository } from '../shared/storage/UserRepository';

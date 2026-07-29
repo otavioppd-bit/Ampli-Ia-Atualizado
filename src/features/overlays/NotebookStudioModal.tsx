@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { Modal } from '../../shared/ui/Modal';
 import { GlassCard } from '../../shared/ui/GlassCard';
-import { QuizQuestion } from '../../shared/types';
 
 type StudioTool = 'resumo' | 'mapa' | 'flashcards' | 'gaps';
 

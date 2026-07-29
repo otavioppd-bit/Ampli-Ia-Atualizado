@@ -83,8 +83,6 @@ export function correctEssay(text: string): EssayCorrection {
 
   // Competência 5: Proposta de intervenção (0-200)
   let c5 = 0;
-  const paragraphs = text.split(/\n\s*\n/);
-  const lastParagraph = paragraphs[paragraphs.length - 1] || '';
   const hasAgente = foundAgentes.length > 0;
   const hasAcao = foundAcao.length > 0;
 

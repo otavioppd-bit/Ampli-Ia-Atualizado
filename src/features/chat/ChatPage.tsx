@@ -8,7 +8,7 @@ import { askGemini } from '../../shared/lib/aiService';
 import { ChatMessage, Nota, ChatPersona } from '../../shared/types';
 import { playClick, speak, stopSpeech } from '../../shared/lib/sfx';
 import { PersonaManager } from '../../shared/ui/PersonaManager';
-import { IconSend, IconMic, IconCamera, IconVolume, IconVolumeOff, IconUsers, IconSparkles } from '../../shared/ui/Icons';
+import { IconSend, IconMic, IconCamera, IconVolume, IconVolumeOff, IconUsers, IconSparkles, IconBrain } from '../../shared/ui/Icons';
 
 const QUIZ_KB = buildKBFromQuiz(QUIZ_BANK);
 const ALL_KB = [...ENEM_KB, ...QUIZ_KB];
@@ -430,12 +430,4 @@ export function ChatPage() {
   );
 }
 
-function IconBrain({ size = 20, className, style }: { size?: number; className?: string; style?: React.CSSProperties }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
-      <path d="M12 2a4 4 0 0 0-4 4c0 2 2 3 2 5v1h4v-1c0-2 2-3 2-5a4 4 0 0 0-4-4z" />
-      <path d="M8 17a3 3 0 0 0 3 3h2a3 3 0 0 0 3-3" />
-      <path d="M12 22v-2" />
-    </svg>
-  );
-}
+
