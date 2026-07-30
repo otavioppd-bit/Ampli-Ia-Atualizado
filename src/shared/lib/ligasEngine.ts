@@ -13,6 +13,7 @@ export interface StudyLeagueMessage {
   userName: string;
   text: string;
   timestamp: number;
+  type?: 'system' | 'user';
 }
 
 export interface StudyLeague {
@@ -78,6 +79,7 @@ export function normalizeStudyLeague(league: Partial<StudyLeague> & Pick<StudyLe
       userName: message.userName,
       text: message.text,
       timestamp: message.timestamp,
+      type: message.type || 'user',
     })),
   };
 }
@@ -118,6 +120,7 @@ export function joinLeague(league: StudyLeague, userId: string, userName: string
         userName,
         text: 'Entrou na liga e passou a fazer parte do grupo.',
         timestamp: Date.now(),
+        type: 'system',
       },
     ],
   };
@@ -140,6 +143,14 @@ export function toggleGoalCompletion(league: StudyLeague, goalId: string, userId
   };
 }
 
+export function getLeaguesJoinedByUser(leagues: StudyLeague[], userId: string): StudyLeague[] {
+  return leagues.filter(liga => liga.joinedBy.includes(userId));
+}
+
+export function canJoinMoreLeagues(leagues: StudyLeague[], userId: string, maxLeagues: number = 2): boolean {
+  return getLeaguesJoinedByUser(leagues, userId).length < maxLeagues;
+}
+
 export function postLeagueMessage(league: StudyLeague, message: Omit<StudyLeagueMessage, 'timestamp'>): StudyLeague {
   return {
     ...league,
@@ -147,6 +158,7 @@ export function postLeagueMessage(league: StudyLeague, message: Omit<StudyLeague
       ...league.messages,
       {
         ...message,
+        type: message.type || 'user',
         timestamp: Date.now(),
       },
     ],

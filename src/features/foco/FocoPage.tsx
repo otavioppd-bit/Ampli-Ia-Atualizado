@@ -14,6 +14,8 @@ export function FocoPage() {
   const [historico, setHistorico] = useState<{ tipo: string; data: number; duracao: number }[]>([]);
   const [sessoesHoje, setSessoesHoje] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mutedRef = useRef(isMuted);
+  mutedRef.current = isMuted;
 
   useEffect(() => {
     try {
@@ -62,7 +64,7 @@ export function FocoPage() {
       if (prev <= 1) {
         clearInterval(intervalRef.current!);
         intervalRef.current = null;
-        if (!isMuted) playAlerta();
+        if (!mutedRef.current) playAlerta();
         return 0;
       }
       return prev - 1;
@@ -70,13 +72,8 @@ export function FocoPage() {
   }
 
   function iniciar() {
-    if (state === 'idle' || state === 'concluido') {
-      setState('foco');
-      setSegundos(FOCO_MIN * 60);
-    } else {
-      setState('pausa');
-      setSegundos(PAUSA_MIN * 60);
-    }
+    setState('foco');
+    setSegundos(FOCO_MIN * 60);
   }
 
   useEffect(() => {

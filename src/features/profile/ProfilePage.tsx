@@ -27,6 +27,11 @@ export function ProfilePage() {
     const profile = getProfile(session.uid);
     setEscolaId(profile.escolaId || '');
     setTurmaId(profile.turmaId || '');
+    const user = userRepository.findByEmail(session.email);
+    if (user) {
+      setSobrenome(user.sobrenome || '');
+      setMeta(user.metaEstudo || '');
+    }
     setEscolas(getEscolasCadastradas());
     setTurmas(getTurmasCadastradas());
   }, [session]);
@@ -221,49 +226,46 @@ export function ProfilePage() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center text-lg">🤖</div>
           <div>
             <h2 className="text-sm font-semibold text-gray-300">IA Generativa</h2>
-            <p className="text-xs text-gray-500">Conecte uma IA gratuita para respostas inteligentes</p>
+            <p className="text-xs text-gray-500">Conecte sua IA para respostas no nível de pesquisador e suporte a estudos avançados.</p>
           </div>
         </div>
+        <div className="flex items-center gap-2 text-xs text-gray-500 bg-amber-500/5 rounded-xl p-3 border border-amber-500/10 mb-4">
+          <span className="text-amber-400 shrink-0">💡</span>
+          <span>Use sua chave <strong className="text-gray-300">Gemini API</strong> (gratuita) do Google AI Studio. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-amber-400 underline">Obter chave grátis</a></span>
+        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-xs text-gray-500 bg-amber-500/5 rounded-xl p-3 border border-amber-500/10">
-            <span className="text-amber-400 shrink-0">💡</span>
-            <span>Use sua chave <strong className="text-gray-300">Gemini API</strong> (gratuita) do Google AI Studio. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-amber-400 underline">Obter chave grátis</a></span>
-          </div>
+        <div className="relative mb-4">
+          <input
+            type={showKey ? 'text' : 'password'}
+            value={keyInput}
+            onChange={e => setKeyInput(e.target.value)}
+            placeholder="Cole sua chave Gemini API aqui..."
+            className="w-full text-sm pr-10"
+          />
+          <button
+            onClick={() => setShowKey(!showKey)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 p-1.5"
+          >
+            {showKey ? '🙈' : '👁️'}
+          </button>
+        </div>
 
-          <div className="relative">
-            <input
-              type={showKey ? 'text' : 'password'}
-              value={keyInput}
-              onChange={e => setKeyInput(e.target.value)}
-              placeholder="Cole sua chave Gemini API aqui..."
-              className="w-full text-sm pr-10"
-            />
-            <button
-              onClick={() => setShowKey(!showKey)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 p-1.5"
-            >
-              {showKey ? '🙈' : '👁️'}
-            </button>
-          </div>
-
-          <div className="flex gap-2">
-            <button onClick={handleSaveKey} className="btn-primary flex-1" disabled={!keyInput.trim()}>
-              {keyInput.trim() === apiKey ? 'Conectado ✓' : 'Conectar IA'}
-            </button>
-            {apiKey && (
-              <button onClick={() => { setKeyInput(''); setApiKey(''); }} className="btn-ghost text-sm text-red-400 hover:text-red-300">
-                Remover
-              </button>
-            )}
-          </div>
-
+        <div className="flex gap-2 mb-4">
+          <button onClick={handleSaveKey} className="btn-primary flex-1" disabled={!keyInput.trim()}>
+            {keyInput.trim() === apiKey ? 'Conectado ✓' : 'Conectar IA'}
+          </button>
           {apiKey && (
-            <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/5 rounded-xl px-3 py-2 border border-emerald-500/10">
-              <span>✓</span> IA conectada. O chat usará IA generativa para respostas inteligentes.
-            </div>
+            <button onClick={() => { setKeyInput(''); setApiKey(''); }} className="btn-ghost text-sm text-red-400 hover:text-red-300">
+              Remover
+            </button>
           )}
         </div>
+
+        {apiKey && (
+          <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/5 rounded-xl px-3 py-2 border border-emerald-500/10">
+            <span>✓</span> IA conectada. O chat usará IA generativa para respostas inteligentes.
+          </div>
+        )}
       </div>
 
       {/* Tools */}

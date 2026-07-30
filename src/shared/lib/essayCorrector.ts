@@ -1,9 +1,5 @@
 import { EssayCorrection } from '../types';
-
-/**
- * Corretor de Redação heurístico estilo ENEM.
- * 100% local, baseado em regras. Substituir por API de correção real (ex: Claude) quando disponível.
- */
+import { correctEssayWithAI as aiCorrect } from './aiService';
 
 const GIRIAS = ['tipo', 'tlgd', 'mano', 'parceiro', 'meu', 'brother', 'fml', 'tranquilo', 'suave', 'tô', 'tava', 'pra caramba', 'muito louco', 'da hora', 'legalzinho'];
 
@@ -129,4 +125,26 @@ export function correctEssay(text: string): EssayCorrection {
     pontosMelhorar,
     originalText: text,
   };
+}
+
+export async function correctEssayAI(text: string, apiKey: string, tema?: string): Promise<EssayCorrection> {
+  const raw = await aiCorrect(text, apiKey, tema);
+  try {
+    const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*$/gm, '').trim();
+    const parsed = JSON.parse(cleaned);
+    return {
+      competencia1: Math.min(200, Math.max(0, Math.round(parsed.competencia1 ?? 0))),
+      competencia2: Math.min(200, Math.max(0, Math.round(parsed.competencia2 ?? 0))),
+      competencia3: Math.min(200, Math.max(0, Math.round(parsed.competencia3 ?? 0))),
+      competencia4: Math.min(200, Math.max(0, Math.round(parsed.competencia4 ?? 0))),
+      competencia5: Math.min(200, Math.max(0, Math.round(parsed.competencia5 ?? 0))),
+      notaFinal: Math.min(1000, Math.max(0, Math.round(parsed.notaFinal ?? 0))),
+      pontosFortes: Array.isArray(parsed.pontosFortes) ? parsed.pontosFortes.slice(0, 5) : [],
+      pontosMelhorar: Array.isArray(parsed.pontosMelhorar) ? parsed.pontosMelhorar.slice(0, 5) : [],
+      originalText: text,
+    };
+  } catch {
+    const fallback = correctEssay(text);
+    return { ...fallback, pontosFortes: ['Correção IA não disponível — usado fallback offline', ...fallback.pontosFortes] };
+  }
 }

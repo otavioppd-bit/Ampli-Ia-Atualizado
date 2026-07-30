@@ -105,8 +105,10 @@ export function ChatPage() {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('mm_chat_messages');
-    if (saved) { try { useAppStore.getState().setChatMessages(JSON.parse(saved)); } catch { } }
+    if (chatMessages.length === 0) {
+      const saved = localStorage.getItem('mm_chat_messages');
+      if (saved) { try { useAppStore.getState().setChatMessages(JSON.parse(saved)); } catch { } }
+    }
   }, []);
 
   useEffect(() => {
@@ -124,7 +126,7 @@ export function ChatPage() {
     persistMessages(newMsgs);
     setInput('');
     if (inputRef.current) { inputRef.current.style.height = 'auto'; }
-    const mood = detectAndSetMood(text);
+    const mood = await detectAndSetMood(text);
 
     if (apiKey) {
       setIsGenerating(true);

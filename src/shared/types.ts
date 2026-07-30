@@ -1,4 +1,6 @@
 // ===== Auth =====
+export type UserRole = 'student' | 'educator' | 'parent';
+
 export interface User {
   uid: string;
   email: string;
@@ -6,13 +8,17 @@ export interface User {
   sobrenome?: string;
   metaEstudo?: string;
   senha: string;
+  role: UserRole;
 }
 
 export interface Session {
   uid: string;
   email: string;
   nome: string;
+  role: UserRole;
 }
+
+export type RolePage = 'dashboard' | 'educator-dashboard' | 'parent-dashboard';
 
 // ===== Mood/Emotion =====
 export type MoodType = 'stress' | 'anxiety' | 'sadness' | 'tired' | 'demotivated' | 'focused' | 'motivated' | 'happy' | 'energetic' | 'neutral';

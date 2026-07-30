@@ -1,4 +1,4 @@
-import { User, Session } from '../types';
+import { User, Session, UserRole } from '../types';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 
 const USERS_KEY = 'mm_users';
@@ -24,7 +24,8 @@ export class UserRepository {
 
   register(user: User): boolean {
     const users = this.getUsers();
-    if (users.length >= 40) return false;
+    const isStudent = user.role === 'student';
+    if (isStudent && users.filter(u => u.role === 'student').length >= 40) return false;
     if (users.find(u => u.email === user.email)) return false;
     users.push(user);
     this.saveUsers(users);
@@ -38,12 +39,10 @@ export class UserRepository {
   }
 
   async loginSupabase(email: string, senha: string): Promise<{ user: User | null; error?: string }> {
-    // Try local first
     const localUser = this.login(email, senha);
     if (localUser) {
-      const session: Session = { uid: localUser.uid, email: localUser.email, nome: localUser.nome };
+      const session: Session = { uid: localUser.uid, email: localUser.email, nome: localUser.nome, role: localUser.role || 'student' };
       this.saveSession(session);
-      // Try Supabase sync in background
       if (isSupabaseConfigured()) {
         const sb = getSupabase();
         if (sb) {
@@ -53,7 +52,6 @@ export class UserRepository {
       return { user: localUser };
     }
 
-    // If not found locally but Supabase is configured, try cloud login
     if (isSupabaseConfigured()) {
       const sb = getSupabase();
       if (sb) {
@@ -64,9 +62,9 @@ export class UserRepository {
 
           const { data: profile } = await sb.from('profiles').select('*').eq('auth_id', data.user.id).maybeSingle();
           if (profile) {
-            const session: Session = { uid: profile.uid, email: profile.email, nome: profile.nome };
+            const session: Session = { uid: profile.uid, email: profile.email, nome: profile.nome, role: profile.role || 'student' };
             this.saveSession(session);
-            return { user: { uid: profile.uid, email: profile.email, nome: profile.nome, senha: '' } };
+            return { user: { uid: profile.uid, email: profile.email, nome: profile.nome, senha: '', role: profile.role || 'student' } };
           }
           return { user: null, error: 'Perfil não encontrado' };
         } catch (e: any) {
@@ -78,19 +76,18 @@ export class UserRepository {
     return { user: null, error: 'E-mail ou senha incorretos' };
   }
 
-  async registerSupabase(email: string, senha: string, nome: string): Promise<{ user: User | null; error?: string }> {
-    // Always register locally first (offline-first)
+  async registerSupabase(email: string, senha: string, nome: string, role: UserRole = 'student'): Promise<{ user: User | null; error?: string }> {
     const localUid = `user_${Date.now()}`;
-    const registered = this.register({ uid: localUid, email, nome, senha });
+    const registered = this.register({ uid: localUid, email, nome, senha, role });
     if (!registered) {
       const users = this.getUsers();
-      return { user: null, error: users.length >= 40 ? 'Turma cheia. Limite de 40 alunos.' : 'E-mail já cadastrado' };
+      const isStudent = role === 'student';
+      return { user: null, error: isStudent && users.filter(u => u.role === 'student').length >= 40 ? 'Turma cheia. Limite de 40 alunos.' : 'E-mail já cadastrado' };
     }
 
-    const session: Session = { uid: localUid, email, nome };
+    const session: Session = { uid: localUid, email, nome, role };
     this.saveSession(session);
 
-    // Try Supabase sync in background — if it fails (rate limit etc), user still works locally
     if (isSupabaseConfigured()) {
       const sb = getSupabase();
       if (sb) {
@@ -98,7 +95,7 @@ export class UserRepository {
           const { data, error } = await sb.auth.signUp({
             email,
             password: senha,
-            options: { data: { nome } },
+            options: { data: { nome, role } },
           });
           if (!error && data?.user) {
             const supabaseUid = `user_${data.user.id}`;
@@ -106,15 +103,14 @@ export class UserRepository {
               uid: supabaseUid,
               email,
               nome,
+              role,
               auth_id: data.user.id,
             });
-            // Update session with Supabase UID
-            const supabaseSession: Session = { uid: supabaseUid, email, nome };
+            const supabaseSession: Session = { uid: supabaseUid, email, nome, role };
             this.saveSession(supabaseSession);
-            return { user: { uid: supabaseUid, email, nome, senha } };
+            return { user: { uid: supabaseUid, email, nome, senha, role } };
           }
           if (error) {
-            // Rate limit or other Supabase error — log but don't block user
             console.warn('Supabase signup skipped (rate limit or network):', error.message);
           }
         } catch (e) {
@@ -123,7 +119,7 @@ export class UserRepository {
       }
     }
 
-    return { user: { uid: localUid, email, nome, senha } };
+    return { user: { uid: localUid, email, nome, senha, role } };
   }
 
   async logoutSupabase(): Promise<void> {

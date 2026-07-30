@@ -111,7 +111,10 @@ export function AppShell() {
               {session?.nome?.charAt(0)?.toUpperCase() || '?'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-white truncate">{session?.nome || 'Usuário'}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-medium text-white truncate">{session?.nome || 'Usuário'}</p>
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500/10 text-[8px] text-amber-400 font-medium leading-none">Aluno</span>
+              </div>
               <p className="text-[10px] text-gray-500 truncate">{session?.email || ''}</p>
             </div>
             <button
@@ -126,15 +129,15 @@ export function AppShell() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 md:ml-64 p-4 md:p-8 pb-28 md:pb-8 relative z-10">
-        <div className="max-w-5xl mx-auto min-h-[calc(100dvh-4rem)]">
+      <main className="flex-1 md:ml-64 p-3 md:p-8 pb-24 md:pb-8 relative z-10">
+        <div className="max-w-5xl mx-auto min-h-[calc(100dvh-3rem)]">
           {renderPage()}
         </div>
       </main>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 px-1 pb-1.5">
-        <div className="glass rounded-2xl px-1 py-1 flex justify-around gap-0">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 pb-1.5 safe-area-bottom">
+        <div className="glass rounded-2xl mx-1 px-0.5 py-0.5 flex justify-around gap-0">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const Icon = tab.icon;
@@ -143,17 +146,17 @@ export function AppShell() {
                   key={tab.id}
                   data-tab={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex flex-col items-center justify-center min-w-0 flex-1 py-1.5 rounded-xl transition-all duration-200 text-[9px] leading-tight font-medium ${
+                  className={`flex flex-col items-center justify-center min-w-0 flex-1 py-2 rounded-xl transition-all duration-200 text-[10px] leading-tight font-medium min-h-[48px] ${
                     isActive
                       ? 'text-amber-400 bg-amber-500/10'
                       : 'text-gray-500'
                   }`}
                 >
                   <Icon
-                    size={18}
-                    className={`mb-0.5 ${isActive ? '' : ''}`}
+                    size={20}
+                    className="mb-0.5"
                   />
-                  <span className="truncate max-w-full">{tab.label}</span>
+                  <span className="truncate max-w-full px-0.5">{tab.label}</span>
                 </button>
             );
           })}

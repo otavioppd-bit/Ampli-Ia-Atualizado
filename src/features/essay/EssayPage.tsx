@@ -1,28 +1,40 @@
 import { useState } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { GlassCard } from '../../shared/ui/GlassCard';
-import { correctEssay } from '../../shared/lib/essayCorrector';
+import { correctEssay, correctEssayAI } from '../../shared/lib/essayCorrector';
 import { playCorrect, playError } from '../../shared/lib/sfx';
 
 export function EssayPage() {
   const [text, setText] = useState('');
+  const [tema, setTema] = useState('');
   const [isCorrecting, setIsCorrecting] = useState(false);
-  const { lastCorrection, setLastCorrection, addXP, addLog, isMuted } = useAppStore();
+  const { lastCorrection, setLastCorrection, addXP, addLog, isMuted, apiKey, setToast } = useAppStore();
 
-  function handleCorrect() {
+  async function handleCorrect() {
     if (text.trim().length < 50) return;
     setIsCorrecting(true);
-    setTimeout(() => {
-      const correction = correctEssay(text);
+    try {
+      let correction;
+      if (apiKey) {
+        correction = await correctEssayAI(text, apiKey, tema || undefined);
+      } else {
+        await new Promise(r => setTimeout(r, 800));
+        correction = correctEssay(text);
+      }
       setLastCorrection(correction);
-      setIsCorrecting(false);
       const xpGain = correction.notaFinal >= 600 ? 100 : 50;
       addXP(xpGain);
       addLog({ timestamp: Date.now(), type: 'essay', description: `Redação corrigida: ${correction.notaFinal}/1000`, xp: xpGain });
       if (!isMuted) {
         if (correction.notaFinal >= 600) playCorrect(); else playError();
       }
-    }, 800);
+    } catch (e) {
+      setToast('Erro na correção: ' + (e instanceof Error ? e.message : 'erro desconhecido'), 'error');
+      const fallback = correctEssay(text);
+      setLastCorrection(fallback);
+    } finally {
+      setIsCorrecting(false);
+    }
   }
 
   function getNotaColor(nota: number): string {
@@ -51,12 +63,22 @@ export function EssayPage() {
       <GlassCard>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-300">Sua Redação</h2>
-          {wordCount > 0 && (
-            <span className={`badge ${wordCount >= 150 ? 'badge-emerald' : 'badge-red'}`}>
-              {wordCount} palavras
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {apiKey && <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">Correção IA</span>}
+            {wordCount > 0 && (
+              <span className={`badge ${wordCount >= 150 ? 'badge-emerald' : 'badge-red'}`}>
+                {wordCount} palavras
+              </span>
+            )}
+          </div>
         </div>
+        <input
+          type="text"
+          value={tema}
+          onChange={e => setTema(e.target.value)}
+          placeholder="Tema da redação (ex: 'Desafios da inclusão digital no Brasil')"
+          className="w-full bg-white/[0.03] rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500/30 mb-4 transition-all"
+        />
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}

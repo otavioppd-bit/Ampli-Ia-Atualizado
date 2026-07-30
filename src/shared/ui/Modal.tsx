@@ -30,13 +30,13 @@ export function Modal({ open, onClose, children, title, fullScreen }: ModalProps
         onClick={onClose}
       />
       <div
-        className={`relative z-10 animate-scale-in ${
+        className={`relative z-10 animate-scale-in w-full ${
           fullScreen
-            ? 'w-full max-w-4xl h-[90dvh]'
-            : 'w-full max-w-lg max-h-[85dvh]'
+            ? 'max-w-4xl h-dvh md:h-[90dvh]'
+            : 'max-w-lg max-h-dvh md:max-h-[85dvh]'
         }`}
       >
-        <GlassCard className={`overflow-y-auto ${fullScreen ? 'h-full' : 'max-h-[85dvh]'}`} padding="none">
+        <GlassCard className={`overflow-y-auto ${fullScreen ? 'h-full' : 'max-h-dvh md:max-h-[85dvh]'}`} padding="none">
           {title && (
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
               <h2 className="text-lg font-bold text-white">{title}</h2>

@@ -5,6 +5,8 @@ import { supabaseRepository } from './shared/storage/SupabaseRepository';
 import { isSupabaseConfigured } from './shared/lib/supabase';
 import { AuthPage } from './features/auth/AuthPage';
 import { AppShell } from './app/AppShell';
+import { EducatorPage } from './features/educator/EducatorPage';
+import { ParentPage } from './features/parent/ParentPage';
 import { ParticleCanvas } from './features/atmo/ParticleCanvas';
 import { Toast } from './shared/ui/Toast';
 import { OnboardingTour } from './shared/ui/OnboardingTour';
@@ -12,7 +14,7 @@ import { GamificationState, ChatPersona } from './shared/types';
 import { getToday } from './shared/lib/utils';
 
 export default function App() {
-  const { isAuthenticated, setSession, updateGamification, setLogs, setNotas, setChatMessages, setPersonas, setActivePersonaId, setApiKey, gamification } = useAppStore();
+  const { isAuthenticated, userRole, setSession, updateGamification, setLogs, setNotas, setChatMessages, setPersonas, setActivePersonaId, setApiKey, gamification } = useAppStore();
   const { session } = useAppStore();
   const logs = useAppStore(s => s.logs);
 
@@ -65,9 +67,9 @@ export default function App() {
     if (savedApiKey) setApiKey(savedApiKey);
   }, []);
 
-  // Streak check
+  // Streak check (only for students)
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || userRole !== 'student') return;
     const today = getToday();
     const lastAccess = gamification.lastAccessDate;
     let streak = gamification.streak;
@@ -82,7 +84,7 @@ export default function App() {
       }
       updateGamification({ lastAccessDate: today, streak });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, userRole]);
 
   // Persist gamification to localStorage + Supabase
   useEffect(() => {
@@ -108,6 +110,27 @@ export default function App() {
     );
   }
 
+  if (userRole === 'educator') {
+    return (
+      <>
+        <ParticleCanvas />
+        <EducatorPage />
+        <Toast />
+      </>
+    );
+  }
+
+  if (userRole === 'parent') {
+    return (
+      <>
+        <ParticleCanvas />
+        <ParentPage />
+        <Toast />
+      </>
+    );
+  }
+
+  // Default: student
   return (
     <>
       <ParticleCanvas />

@@ -100,7 +100,7 @@ export function PersonaManager() {
                 <textarea
                   value={instruction}
                   onChange={e => setInstruction(e.target.value)}
-                  placeholder="Instrução: como ela deve agir, o que ela faz, seus limites"
+                  placeholder="Instrução: descreva comportamento, tom acadêmico, escopo e rigor de pesquisador"
                   rows={3}
                   className="w-full resize-none"
                 />

@@ -1,25 +1,108 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { Modal } from '../../shared/ui/Modal';
 import { GlassCard } from '../../shared/ui/GlassCard';
+import { QuizQuestion } from '../../shared/types';
+import mermaid from 'mermaid';
+
+mermaid.initialize({ theme: 'dark', themeVariables: { primaryColor: '#f59e0b', primaryTextColor: '#fff', primaryBorderColor: '#f59e0b33', lineColor: '#f59e0b55', fontSize: '14px' } });
 
 type StudioTool = 'resumo' | 'mapa' | 'flashcards' | 'gaps';
 
 export function NotebookStudioModal() {
-  const { showNotebookStudio, setShowNotebookStudio, notas } = useAppStore();
+  const { showNotebookStudio, setShowNotebookStudio, notas, apiKey } = useAppStore();
   const [activeTool, setActiveTool] = useState<StudioTool>('resumo');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState('');
+  const [mermaidSvg, setMermaidSvg] = useState('');
+  const [flashcards, setFlashcards] = useState<QuizQuestion[]>([]);
+  const [flashcardIndex, setFlashcardIndex] = useState(0);
+  const [flashcardFlipped, setFlashcardFlipped] = useState(false);
+  const mermaidRef = useRef<HTMLDivElement>(null);
 
-  const notasList = useMemo(() => notas, [notas]);
+  const notasList = notas;
 
-  function simulateLoad(fn: () => string) {
-    setLoading(true); setResult('');
-    setTimeout(() => { setResult(fn()); setLoading(false); }, 500);
+  useEffect(() => {
+    if (mermaidSvg && mermaidRef.current) {
+      mermaidRef.current.innerHTML = mermaidSvg;
+    }
+  }, [mermaidSvg]);
+
+  async function runTool(tool: StudioTool) {
+    setLoading(true);
+    setResult('');
+    setMermaidSvg('');
+    setFlashcards([]);
+    setFlashcardIndex(0);
+    setFlashcardFlipped(false);
+
+    await new Promise(r => setTimeout(r, 300));
+
+    try {
+      if (tool === 'resumo') {
+        await generateResumo();
+      } else if (tool === 'mapa') {
+        await generateMapa();
+      } else if (tool === 'flashcards') {
+        await generateFlashcards();
+      } else if (tool === 'gaps') {
+        await generateGaps();
+      }
+    } catch (e: any) {
+      setResult(`Erro: ${e?.message || 'Falha ao processar'}`);
+    }
+    setLoading(false);
   }
 
-  function generateResumo(): string {
-    if (notasList.length === 0) return 'Nenhuma nota salva ainda. Adicione notas ao Caderno para usar esta ferramenta.';
+  async function generateResumo() {
+    if (notasList.length === 0) {
+      setResult('Nenhuma nota salva ainda. Adicione notas ao Caderno para usar esta ferramenta.');
+      return;
+    }
+
+    if (apiKey) {
+      try {
+        const notasText = notasList.slice(-10).map(n => `• ${n.text}`).join('\n');
+        const prompt = `Com base nas seguintes anotações de estudante, gere um resumo executivo bem estruturado com seções claras, destacando os principais conceitos, conexões entre temas e pontos-chave que merecem revisão:\n\n${notasText}`;
+        const raw = await callGemini(prompt, apiKey);
+        setResult(raw);
+        return;
+      } catch {}
+    }
+
+    const wordFreq: Record<string, number> = {};
+    for (const nota of notasList) {
+      for (const w of [...new Set(nota.text.toLowerCase().split(/\s+/).filter((w: string) => w.length > 4))]) {
+        wordFreq[w] = (wordFreq[w] || 0) + 1;
+      }
+    }
+    const topWords = Object.entries(wordFreq).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const recent = notasList.slice(-5).reverse();
+    let out = '📋 Resumo das Anotações\n\nPalavras-chave mais frequentes:\n';
+    out += topWords.map(([w, c]) => `• ${w} (${c}x)`).join('\n');
+    out += '\n\nNotas Recentes:\n';
+    out += recent.map((n: any) => `• ${new Date(n.data).toLocaleDateString()}: ${n.text.slice(0, 120)}${n.text.length > 120 ? '...' : ''}`).join('\n');
+    setResult(out);
+  }
+
+  async function generateMapa() {
+    if (notasList.length === 0) {
+      setResult('Nenhuma nota salva ainda.');
+      return;
+    }
+
+    if (apiKey) {
+      try {
+        const notasText = notasList.slice(-10).map(n => `• ${n.text}`).join('\n');
+        const prompt = `Com base nestas anotações, crie um mapa mental no formato Mermaid (graph TD). Inclua pelo menos 8-12 nós conectados hierarquicamente. Mostre APENAS o código Mermaid, sem explicações:\n\n${notasText}`;
+        const raw = await callGemini(prompt, apiKey);
+        const mermaidCode = raw.replace(/```mermaid\s*/gi, '').replace(/```\s*$/gm, '').trim();
+        await renderMermaid(mermaidCode);
+        setResult('🧠 Mapa mental gerado por IA');
+        return;
+      } catch {}
+    }
+
     const wordFreq: Record<string, number> = {};
     for (const nota of notasList) {
       for (const w of [...new Set(nota.text.toLowerCase().split(/\s+/).filter((w: string) => w.length > 4))]) {
@@ -27,61 +110,143 @@ export function NotebookStudioModal() {
       }
     }
     const topWords = Object.entries(wordFreq).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([w]) => w);
-    const recent = notasList.slice(-5).reverse();
-    let out = '📋 **Resumo Executivo**\n\n**Palavras-chave:**\n' + topWords.map(w => `• ${w}`).join('\n') + '\n\n**Notas Recentes:**\n';
-    return out + recent.map((n: any) => `• *${new Date(n.data).toLocaleDateString()}*: ${n.text.slice(0, 100)}${n.text.length > 100 ? '...' : ''}`).join('\n');
+    let mermaidCode = 'graph TD\n  A["📚 Meus Estudos"]\n';
+    topWords.forEach((w, i) => {
+      mermaidCode += `  N${i}["${w.charAt(0).toUpperCase() + w.slice(1)}"]\n  A --> N${i}\n`;
+    });
+    await renderMermaid(mermaidCode);
+    setResult(`🧠 Mapa mental com ${topWords.length} conceitos principais`);
   }
 
-  function generateMapa(): string {
-    if (notasList.length === 0) return 'Nenhuma nota salva ainda.';
-    const wordFreq: Record<string, number> = {};
-    for (const nota of notasList) {
-      for (const w of [...new Set(nota.text.toLowerCase().split(/\s+/).filter((w: string) => w.length > 4))]) {
-        wordFreq[w] = (wordFreq[w] || 0) + 1;
-      }
-    }
-    const topWords = Object.entries(wordFreq).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([w]) => w);
-    let mermaid = 'graph TD\n  A["📚 Meus Estudos"]\n';
-    topWords.forEach((w, i) => { mermaid += `  N${i}["${w.charAt(0).toUpperCase() + w.slice(1)}"]\n  A --> N${i}\n`; });
-    return '```mermaid\n' + mermaid + '\n```\n\n🧠 Mapa mental com ' + topWords.length + ' conexões geradas.';
-  }
-
-  function generateFlashcards(): string {
+  async function generateFlashcards() {
     const withContent = notasList.filter((n: any) => n.text.split(/\s+/).length > 3);
-    if (withContent.length < 2) return 'Precisa de pelo menos 2 notas com conteúdo para gerar flashcards.';
-    const selected = [...withContent].sort(() => Math.random() - 0.5).slice(0, 3);
+    if (withContent.length < 2) {
+      setResult('Precisa de pelo menos 2 notas com conteúdo para gerar flashcards.');
+      return;
+    }
+
+    if (apiKey) {
+      try {
+        const notasText = withContent.slice(-8).map((n: any) => n.text).join('\n---\n');
+        const prompt = `Com base nas anotações abaixo, gere 5 flashcards no formato de perguntas e respostas para revisão. Cada flashcard deve ter uma pergunta clara e uma resposta direta. Responda APENAS com um array JSON, sem formatação adicional:\n\n[{"pergunta": "...", "resposta": "..."}, ...]\n\nAnotações:\n${notasText}`;
+        const raw = await callGemini(prompt, apiKey);
+        const jsonMatch = raw.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const cards = JSON.parse(jsonMatch[0]);
+          const questions: QuizQuestion[] = cards.map((c: any, i: number) => ({
+            id: `flash_ai_${Date.now()}_${i}`,
+            materia: 'Flashcards IA',
+            enunciado: c.pergunta,
+            alternativas: [c.resposta, 'Revise a anotação original', 'Consulte o material de apoio', 'Pergunte ao Mentor'],
+            correta: 0,
+            explicacao: c.resposta,
+          }));
+          (window as any).__flashcardQuiz = questions;
+          setFlashcards(questions);
+          setResult(`${questions.length} flashcards gerados por IA!`);
+          return;
+        }
+      } catch {}
+    }
+
+    const selected = [...withContent].sort(() => Math.random() - 0.5).slice(0, 4);
     const questions: QuizQuestion[] = selected.map((nota: any, idx: number) => {
       const words = nota.text.split(/\s+/).filter((w: string) => w.length > 4);
       const keyword = words[Math.floor(Math.random() * words.length)] || 'conceito';
       const correct = keyword.charAt(0).toUpperCase() + keyword.slice(1);
-      const distractors = withContent.filter((n: any) => n.id !== nota.id).flatMap((n: any) => n.text.split(/\s+/).filter((w: string) => w.length > 4 && w !== keyword)).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i).slice(0, 3).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1));
+      const distractors = withContent.filter((n: any) => n.id !== nota.id)
+        .flatMap((n: any) => n.text.split(/\s+/).filter((w: string) => w.length > 4 && w !== keyword))
+        .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i)
+        .slice(0, 3)
+        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1));
       while (distractors.length < 3) distractors.push(`Opção ${distractors.length + 2}`);
       const alternatives = [correct, ...distractors].sort(() => Math.random() - 0.5);
-      return { id: `flash_${Date.now()}_${idx}`, materia: 'Flashcards', enunciado: `Complete a lacuna: "A palavra ________ aparece na nota sobre..."`, alternativas: alternatives, correta: alternatives.indexOf(correct), explicacao: `Palavra-chave: "${correct}", extraída das suas anotações.` };
+      return {
+        id: `flash_${Date.now()}_${idx}`,
+        materia: 'Flashcards',
+        enunciado: `Complete: "A palavra ________ aparece na nota sobre..."`,
+        alternativas: alternatives,
+        correta: alternatives.indexOf(correct),
+        explicacao: `Palavra-chave: "${correct}", extraída das suas anotações.`,
+      };
     });
     (window as any).__flashcardQuiz = questions;
-    return questions.map((q, i) => `**${i + 1}.** ${q.alternativas[q.correta]}\n`).join('\n') + `\n\n✅ ${questions.length} flashcards gerados! Clique em "Ir para o Quiz" para respondê-los.`;
+    setFlashcards(questions);
+    setResult(`${questions.length} flashcards gerados!`);
   }
 
-  function generateGaps(): string {
-    if (notasList.length === 0) return 'Nenhuma nota salva ainda.';
+  async function generateGaps() {
+    if (notasList.length === 0) {
+      setResult('Nenhuma nota salva ainda.');
+      return;
+    }
+
+    if (apiKey) {
+      try {
+        const notasText = notasList.slice(-15).map(n => `• ${n.text}`).join('\n');
+        const prompt = `Analise estas anotações de estudante e identifique:\n1. Quais conceitos aparecem com frequência (possíveis gaps de entendimento)\n2. Quais tópicos precisam de mais revisão\n3. Sugira 3 áreas de foco prioritário\n\nAnotações:\n${notasText}\n\nResponda em markdown com seções claras.`;
+        const raw = await callGemini(prompt, apiKey);
+        setResult(raw);
+        return;
+      } catch {}
+    }
+
     const wordFreq: Record<string, { count: number; notes: string[] }> = {};
     for (const nota of notasList) {
       for (const w of [...new Set(nota.text.toLowerCase().split(/\s+/).filter((w: string) => w.length > 4))]) {
         if (!wordFreq[w]) wordFreq[w] = { count: 0, notes: [] };
         wordFreq[w].count++;
-        wordFreq[w].notes.push(nota.text.slice(0, 60));
+        wordFreq[w].notes.push(nota.text.slice(0, 80));
       }
     }
     const gaps = Object.entries(wordFreq).filter(([, v]) => v.count >= 2).sort((a, b) => b[1].count - a[1].count);
-    if (gaps.length === 0) return 'Nenhum gap identificado. Continue adicionando anotações!';
-    let out = '🔍 **Análise de Gaps**\n\nPalavras recorrentes em múltiplas notas:\n\n';
-    for (const [word, info] of gaps.slice(0, 6)) {
+    if (gaps.length === 0) {
+      setResult('Nenhum gap identificado. Continue adicionando anotações!');
+      return;
+    }
+    let out = '🔍 Análise de Gaps\n\nConceitos recorrentes em múltiplas anotações (possíveis gaps de compreensão):\n\n';
+    for (const [word, info] of gaps.slice(0, 8)) {
       out += `**${word}** (${info.count}x)\n`;
       for (const note of info.notes.slice(0, 2)) out += `  > "${note}..."\n`;
       out += '\n';
     }
-    return out + '\n📖 Revise esses tópicos com prioridade.';
+    out += '\n📖 Revise esses tópicos com prioridade. Eles aparecem em várias notas, indicando áreas de estudo ativo.';
+    setResult(out);
+  }
+
+  async function callGemini(prompt: string, key: string): Promise<string> {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+      }),
+    });
+    if (!res.ok) throw new Error('Erro na API Gemini');
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return text;
+  }
+
+  async function renderMermaid(code: string) {
+    try {
+      const { svg } = await mermaid.render('mmd_' + Date.now(), code);
+      if (svg.includes('class="error"') || svg.includes('>Error<') || svg.includes('>error<') || svg.includes('flowchart-error')) {
+        setMermaidSvg('');
+        setResult('O diagrama gerado pela IA não pôde ser renderizado. Tente novamente ou com menos notas.');
+        return;
+      }
+      setMermaidSvg(svg);
+    } catch {
+      setMermaidSvg('');
+      setResult('Não foi possível renderizar o mapa mental. Tente novamente com menos notas.');
+    }
+  }
+
+  function goToQuiz() {
+    setShowNotebookStudio(false);
+    useAppStore.getState().setActiveTab('quiz');
   }
 
   const tools: { id: StudioTool; label: string; icon: string }[] = [
@@ -91,13 +256,11 @@ export function NotebookStudioModal() {
     { id: 'gaps', label: 'Análise de Gaps', icon: '🔍' },
   ];
 
-  const actions: Record<StudioTool, () => string> = { resumo: generateResumo, mapa: generateMapa, flashcards: generateFlashcards, gaps: generateGaps };
-
   return (
     <Modal open={showNotebookStudio} onClose={() => setShowNotebookStudio(false)} title="🧠 Notebook AI Studio" fullScreen>
       <div className="flex gap-2 overflow-x-auto pb-2">
         {tools.map(t => (
-          <button key={t.id} onClick={() => { setActiveTool(t.id); simulateLoad(actions[t.id]); }}
+          <button key={t.id} onClick={() => { setActiveTool(t.id); runTool(t.id); }}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
               activeTool === t.id ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'glass-hover text-gray-400 border border-white/5'
             }`}>
@@ -114,25 +277,86 @@ export function NotebookStudioModal() {
             <p className="text-sm text-gray-500 mt-1">Adicione notas ao Caderno primeiro.</p>
           </div>
         )}
+
         {loading && (
           <div className="text-center py-12">
             <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
             <p className="text-sm text-gray-400">Processando suas notas...</p>
           </div>
         )}
+
+        {mermaidSvg && (
+          <div className="mb-4 overflow-x-auto bg-black/20 rounded-xl p-4" ref={mermaidRef} />
+        )}
+
         {result && !loading && (
           <div className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed space-y-4">
             {result}
-            {(window as any).__flashcardQuiz && (
-              <button onClick={() => { setShowNotebookStudio(false); useAppStore.getState().setActiveTab('quiz'); }} className="btn-primary">
+
+            {flashcards.length > 0 && (
+              <div className="space-y-3 mt-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Flashcard {flashcardIndex + 1} de {flashcards.length}</span>
+                  <div className="flex gap-1">
+                    {flashcards.map((_, i) => (
+                      <div key={i} className={`w-2 h-2 rounded-full ${i === flashcardIndex ? 'bg-amber-400' : 'bg-white/10'}`} />
+                    ))}
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setFlashcardFlipped(!flashcardFlipped)}
+                  className="glass rounded-2xl p-6 text-center cursor-pointer min-h-[160px] flex flex-col items-center justify-center transition-all hover:border-amber-500/20 border border-white/5"
+                >
+                  {flashcardFlipped ? (
+                    <div className="space-y-3">
+                      <span className="text-xs text-emerald-400 font-medium uppercase tracking-wider">Resposta</span>
+                      <p className="text-base text-white font-medium">{flashcards[flashcardIndex].alternativas[flashcards[flashcardIndex].correta]}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <span className="text-xs text-amber-400 font-medium uppercase tracking-wider">Pergunta</span>
+                      <p className="text-base text-white font-medium">{flashcards[flashcardIndex].enunciado}</p>
+                      <p className="text-xs text-gray-500 mt-2">Clique para ver a resposta</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <button
+                    onClick={() => { setFlashcardIndex(i => Math.max(0, i - 1)); setFlashcardFlipped(false); }}
+                    disabled={flashcardIndex === 0}
+                    className="btn-secondary flex-1 text-xs"
+                  >
+                    ← Anterior
+                  </button>
+                  <button
+                    onClick={() => { setFlashcardIndex(i => Math.min(flashcards.length - 1, i + 1)); setFlashcardFlipped(false); }}
+                    disabled={flashcardIndex === flashcards.length - 1}
+                    className="btn-primary flex-1 text-xs"
+                  >
+                    Próximo →
+                  </button>
+                </div>
+
+                <button onClick={goToQuiz} className="btn-primary w-full">
+                  🎯 Ir para o Quiz com esses flashcards
+                </button>
+              </div>
+            )}
+
+            {(window as any).__flashcardQuiz && flashcards.length === 0 && (
+              <button onClick={goToQuiz} className="btn-primary">
                 🎯 Ir para o Quiz
               </button>
             )}
           </div>
         )}
+
         {!loading && !result && notasList.length > 0 && (
           <div className="text-center py-8">
-            <p className="text-sm text-gray-400">Selecione uma ferramenta acima.</p>
+            <p className="text-sm text-gray-400">Selecione uma ferramenta acima para processar suas anotações.</p>
+            {apiKey && <p className="text-xs text-amber-400 mt-2">⚡ IA disponível — resultados mais precisos</p>}
           </div>
         )}
       </GlassCard>

@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { MoodType, TabId, GamificationState, ChatMessage, Nota, LogEntry, DailyPlan, EssayCorrection, QuizResult, Session, ChatPersona } from '../shared/types';
+import { MoodType, TabId, GamificationState, ChatMessage, Nota, LogEntry, DailyPlan, EssayCorrection, QuizResult, Session, ChatPersona, UserRole } from '../shared/types';
 import { calculateSSC } from '../shared/lib/sscCalculator';
 import { detectEmotion, getMoodColor } from '../shared/lib/emotionEngine';
+import { analyzeMoodWithAI } from '../shared/lib/aiService';
 import { generatePlan, XP_PER_TASK } from '../shared/lib/plannerEngine';
 import { userRepository } from '../shared/storage/UserRepository';
 import { supabaseRepository } from '../shared/storage/SupabaseRepository';
@@ -11,6 +12,7 @@ import { calcLevel, getToday } from '../shared/lib/utils';
 interface AppState {
   session: Session | null;
   isAuthenticated: boolean;
+  userRole: UserRole;
 
   activeTab: TabId;
   showCrisisOverlay: boolean;
@@ -54,7 +56,7 @@ interface AppState {
   setSono: (v: number) => void;
   setCansaco: (v: number) => void;
   recalcSSC: () => void;
-  detectAndSetMood: (text: string) => MoodType;
+  detectAndSetMood: (text: string) => Promise<MoodType>;
   setMood: (mood: MoodType) => void;
   addChatMessage: (msg: ChatMessage) => void;
   addXP: (n: number) => void;
@@ -88,6 +90,7 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   session: null,
   isAuthenticated: false,
+  userRole: 'student',
 
   activeTab: 'dashboard',
   showCrisisOverlay: false,
@@ -96,11 +99,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   showTutorial: false,
   tutorialStep: 0,
   personas: [
-    { id: 'mentor_enem', name: 'Mentor ENEM', icon: '🧠', color: '#f59e0b', instruction: 'Você é um mentor de estudos para o ENEM. Ajude o aluno com todas as matérias, dê dicas de estudo, corrija redações, motive e oriente. Responda de forma completa e didática.', createdAt: 0 },
-    { id: 'prof_matematica', name: 'Prof. Matemática', icon: '📐', color: '#3b82f6', instruction: 'Você é um professor de matemática focado no ENEM. Responda apenas sobre matemática: álgebra, geometria, estatística, probabilidade. Dê explicações passo a passo e exemplos práticos.', createdAt: 0 },
-    { id: 'prof_portugues', name: 'Prof. Português', icon: '📝', color: '#10b981', instruction: 'Você é um professor de português focado no ENEM. Ajude com gramática, interpretação de texto, literatura brasileira e redação. Explique regras com exemplos claros.', createdAt: 0 },
-    { id: 'prof_ciencias', name: 'Prof. Ciências', icon: '🔬', color: '#8b5cf6', instruction: 'Você é um professor de ciências da natureza focado no ENEM. Responda sobre biologia, física e química. Dê explicações com exemplos do cotidiano e relações com o exame.', createdAt: 0 },
-    { id: 'prof_humanas', name: 'Prof. Humanas', icon: '🌍', color: '#ec4899', instruction: 'Você é um professor de ciências humanas focado no ENEM. Responda sobre história, geografia, filosofia e sociologia. Contextualize eventos e relacione com atualidades.', createdAt: 0 },
+    { id: 'mentor_enem', name: 'Mentor ENEM', icon: '🧠', color: '#f59e0b', instruction: 'Você é um mentor de estudos para o ENEM. Ajude o aluno com todas as matérias, dê dicas de estudo, corrija redações, motive e oriente. Responda com rigor de pesquisador, use argumentos claros e baseie suas respostas em conceitos estruturados.', createdAt: 0 },
+    { id: 'prof_matematica', name: 'Prof. Matemática', icon: '📐', color: '#3b82f6', instruction: 'Você é um professor de matemática focado no ENEM. Responda apenas sobre matemática: álgebra, geometria, estatística, probabilidade. Explique com precisão, justifique cada passo e use um estilo analítico de pesquisador.', createdAt: 0 },
+    { id: 'prof_portugues', name: 'Prof. Português', icon: '📝', color: '#10b981', instruction: 'Você é um professor de português focado no ENEM. Ajude com gramática, interpretação de texto, literatura brasileira e redação. Explique regras com exemplos claros e análise formal, como um pesquisador acadêmico.', createdAt: 0 },
+    { id: 'prof_ciencias', name: 'Prof. Ciências', icon: '🔬', color: '#8b5cf6', instruction: 'Você é um professor de ciências da natureza focado no ENEM. Responda sobre biologia, física e química. Apresente explicações fundamentadas, use analogias científicas e relacione com evidências de campo.', createdAt: 0 },
+    { id: 'prof_humanas', name: 'Prof. Humanas', icon: '🌍', color: '#ec4899', instruction: 'Você é um professor de ciências humanas focado no ENEM. Responda sobre história, geografia, filosofia e sociologia. Contextualize eventos historicamente e use uma abordagem analítica de pesquisador.', createdAt: 0 },
   ],
   activePersonaId: 'mentor_enem',
   showPersonaManager: false,
@@ -127,7 +130,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   logs: [],
   dailyPlan: null,
 
-  setSession: (session) => set({ session, isAuthenticated: !!session }),
+  setSession: (session) => {
+    localStorage.removeItem('mm_chat_messages');
+    set({ session, isAuthenticated: !!session, userRole: session?.role || 'student', chatMessages: [] });
+  },
 
   logout: () => {
     if (isSupabaseConfigured()) {
@@ -138,7 +144,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       userRepository.logoutSupabase();
     }
     userRepository.clearSession();
-    set({ session: null, isAuthenticated: false });
+    set({ session: null, isAuthenticated: false, userRole: 'student' });
   },
 
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -158,20 +164,35 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  detectAndSetMood: (text) => {
-    const result = detectEmotion(text);
-    if (result.matchCount > 0) {
-      const moodColor = getMoodColor(result.mood);
-      const moodEntry = { mood: result.mood, timestamp: Date.now() };
-      set((s) => ({
-        currentMood: result.mood,
-        moodColor,
-        moodHistory: [...s.moodHistory.slice(-23), moodEntry],
-      }));
-      get().recalcSSC();
-      get().regeneratePlan();
+  detectAndSetMood: async (text) => {
+    const apiKey = get().apiKey;
+    let mood: MoodType;
+    let aiReason = '';
+    if (apiKey) {
+      try {
+        const raw = await analyzeMoodWithAI(text, apiKey);
+        const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*$/gm, '').trim();
+        const parsed = JSON.parse(cleaned);
+        mood = parsed.mood as MoodType;
+        aiReason = parsed.reason || '';
+      } catch {
+        const result = detectEmotion(text);
+        mood = result.mood;
+      }
+    } else {
+      const result = detectEmotion(text);
+      mood = result.mood;
     }
-    return result.mood;
+    const moodColor = getMoodColor(mood);
+    const moodEntry = { mood, timestamp: Date.now() };
+    set((s) => ({
+      currentMood: mood,
+      moodColor,
+      moodHistory: [...s.moodHistory.slice(-23), moodEntry],
+    }));
+    get().recalcSSC();
+    get().regeneratePlan();
+    return mood;
   },
 
   setMood: (mood) => {
