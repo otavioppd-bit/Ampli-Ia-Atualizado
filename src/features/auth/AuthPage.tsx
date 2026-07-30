@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { userRepository } from '../../shared/storage/UserRepository';
 import { isSupabaseConfigured } from '../../shared/lib/supabase';
 import { Session, UserRole } from '../../shared/types';
 import { IconMoon, IconSparkles, IconBrain, IconUsers } from '../../shared/ui/Icons';
+import { ColorBlindnessToggle } from '../../shared/ui/ColorBlindnessToggle';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -81,7 +82,9 @@ export function AuthPage() {
 
   if (step === 'role') {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 relative" style={{ background: '#0b1120' }}>
+      <Fragment>
+        <ColorBlindnessToggle />
+        <div className="min-h-screen flex items-center justify-center p-4 relative" style={{ background: '#0b1120' }}>
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-amber-500/5 blur-[100px]" />
           <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-orange-500/5 blur-[100px]" />
@@ -129,13 +132,16 @@ export function AuthPage() {
           </div>
         </div>
       </div>
+    </Fragment>
     );
   }
 
   const roleCfg = ROLE_CONFIG[selectedRole];
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative" style={{ background: '#0b1120' }}>
+    <Fragment>
+      <ColorBlindnessToggle />
+      <div className="min-h-screen flex items-center justify-center p-4 relative" style={{ background: '#0b1120' }}>
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-amber-500/5 blur-[100px]" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-orange-500/5 blur-[100px]" />
@@ -256,5 +262,6 @@ export function AuthPage() {
         </div>
       </div>
     </div>
+    </Fragment>
   );
 }
