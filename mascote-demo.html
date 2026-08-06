@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mascote Interativo — Midnight Mentor</title>
+<style>
+  /* ============================================================
+     MASCOTE INTERATIVO — Midnight Mentor
+     Estados: idle | typing | loading | success (+ error)
+     ============================================================ */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: radial-gradient(1200px 600px at 80% -10%, rgba(245,158,11,.08), transparent 60%),
+                #0b1120;
+    min-height: 100vh;
+    color: #e2e8f0;
+  }
+
+  /* ---------- 1. HTML Estrutural ---------- */
+  #mascot-container {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 9999;
+    width: 120px;
+    height: 120px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #mascot-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    transform-origin: 50% 100%;
+    opacity: 1;
+    /* cross-fade suave ao trocar o src */
+    transition: opacity 0.3s ease;
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
+  }
+
+  /* Balão de fala: oculto por padrão, fade-in via .visible */
+  #speech-bubble {
+    position: absolute;
+    right: calc(100% + 14px);
+    bottom: 50%;
+    transform: translateY(50%) translateX(8px) scale(0.92);
+    min-width: 150px;
+    max-width: 240px;
+    padding: 12px 15px;
+    background: rgba(17, 24, 39, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    color: #f1f5f9;
+    font-size: 13px;
+    line-height: 1.45;
+    font-weight: 500;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(.34,1.56,.64,1), visibility 0.3s;
+    z-index: 2;
+  }
+  #speech-bubble::after {
+    content: '';
+    position: absolute;
+    left: 100%;
+    bottom: 50%;
+    width: 14px;
+    height: 14px;
+    background: inherit;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    transform: translateY(50%) rotate(45deg);
+  }
+  #speech-bubble.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(50%) translateX(0) scale(1);
+  }
+
+  /* ---------- 2. Animações @keyframes por estado ---------- */
+  .state-idle    img { animation: floatY  4s ease-in-out infinite; }
+  .state-typing  img { animation: wiggle  3.6s ease-in-out infinite; }
+  .state-loading img { animation: pulseL  1.3s ease-in-out infinite; }
+  .state-success img { animation: bounce  1.15s cubic-bezier(.22,1,.36,1) both; }
+  .state-error   img { animation: shake   0.9s cubic-bezier(.22,1,.36,1) both; }
+
+  @keyframes floatY {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-3px); }
+  }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25%      { transform: rotate(-2deg); }
+    75%      { transform: rotate(2deg); }
+  }
+  @keyframes pulseL {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.04) translateY(-3px); }
+  }
+  @keyframes bounce {
+    0%   { transform: scale(.4) translateY(16px); opacity: 0; }
+    30%  { transform: scale(1.15) translateY(-22px); opacity: 1; }
+    50%  { transform: scale(.9) translateY(0); }
+    70%  { transform: scale(1.07) translateY(-10px); }
+    85%  { transform: scale(.96) translateY(0); }
+    100% { transform: scale(1) translateY(0); }
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0) rotate(0deg); }
+    20%      { transform: translateX(-5px) rotate(-4deg); }
+    40%      { transform: translateX(5px) rotate(4deg); }
+    60%      { transform: translateX(-4px) rotate(-3deg); }
+    80%      { transform: translateX(4px) rotate(3deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #mascot-container img, #speech-bubble {
+      animation: none !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* ---------- Painel de teste ---------- */
+  .test-panel {
+    position: fixed;
+    top: 24px;
+    left: 24px;
+    z-index: 9998;
+    max-width: 320px;
+    padding: 16px;
+    background: rgba(17, 24, 39, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    color: #e2e8f0;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  }
+  .test-panel h3 { font-size: 14px; margin-bottom: 12px; color: #fbbf24; }
+  .test-panel p  { font-size: 11px; color: #64748b; margin-bottom: 10px; }
+  .test-panel .row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .test-panel button {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    color: #0f172a;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    transition: transform 0.15s ease;
+  }
+  .test-panel button:hover { transform: translateY(-1px); }
+  .test-panel button.ghost { background: rgba(255,255,255,.08); color: #cbd5e1; }
+</style>
+</head>
+<body>
+
+  <!-- ============================================================
+       1. MASCOTE (estrutura principal)
+       ============================================================ -->
+  <div id="mascot-container" class="state-idle">
+    <div id="speech-bubble"><span id="speech-text"></span></div>
+    <img id="mascot-img" src="/mascot-meditate.png" alt="Mascote Midnight Mentor">
+  </div>
+
+  <!-- ============================================================
+       PAINEL DE TESTE (remover em produção)
+       ============================================================ -->
+  <div class="test-panel">
+    <h3>🧪 Teste do Mascote</h3>
+    <p>Mude o estado do personagem ou fale algo com ele:</p>
+    <div class="row">
+      <button onclick="MascotController.changeState('idle')">Idle · meditando</button>
+      <button onclick="MascotController.changeState('typing')">Typing · estudando</button>
+      <button onclick="MascotController.changeState('loading')">Loading · IA</button>
+      <button onclick="MascotController.changeState('success')">Success · pulando</button>
+      <button class="ghost" onclick="MascotController.changeState('error')">Error</button>
+    </div>
+    <div class="row">
+      <button onclick="MascotController.speak('Mandou bem! +30 XP 🎉', 'success')">✅ Falar acerto</button>
+      <button onclick="MascotController.speak('Aguarde, estou analisando sua resposta com a IA…', 'loading')">⏳ Falar loading</button>
+      <button onclick="MascotController.speak('Quase! Leia a explicação e tente de novo 💪', 'error')">💪 Falar incentivo</button>
+      <button class="ghost" onclick="MascotController.hideBubble()">✕ Ocultar balão</button>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+       3. JAVASCRIPT — Máquina de estados e API do mascote
+       ============================================================ */
+    const MascotController = (() => {
+      // Mapa de estados -> sprite + classe de animação
+      const STATES = {
+        idle:    { src: '/mascot-meditate.png', className: 'state-idle' },
+        typing:  { src: '/mascot-study.png',     className: 'state-typing' },
+        loading: { src: '/mascot-correct.png',   className: 'state-loading' },
+        success: { src: '/mascot-jump.png',      className: 'state-success' },
+        error:   { src: '/mascot-meditate.png',  className: 'state-error' },
+      };
+
+      const container = document.getElementById('mascot-container');
+      const img       = document.getElementById('mascot-img');
+      const bubble    = document.getElementById('speech-bubble');
+      const textEl    = document.getElementById('speech-text');
+
+      let currentState = 'idle';
+      let hideTimer = null;
+      let fadeTimer = null;
+
+      /** Troca o estado: atualiza sprite com cross-fade e animação CSS. */
+      function changeState(newState) {
+        const s = STATES[newState] || STATES.idle;
+        if (newState !== currentState) {
+          currentState = newState;
+          container.className = s.className;
+          // cross-fade: esmaece -> troca src -> volta à opacidade total
+          img.style.opacity = '0';
+          clearTimeout(fadeTimer);
+          fadeTimer = setTimeout(() => {
+            img.src = s.src;
+            img.onload = () => { img.style.opacity = '1'; };
+            img.onerror = () => { img.style.opacity = '1'; };
+            // fallback p/ imagens em cache (onload pode não disparar)
+            setTimeout(() => { img.style.opacity = '1'; }, 120);
+          }, 60);
+        }
+      }
+
+      /** Fala um texto: muda o estado (opcional) e exibe o balão com fade-in. */
+      function speak(text, state) {
+        if (state) changeState(state);
+        textEl.textContent = text || '';
+        bubble.classList.add('visible');
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(hideBubble, 5000);
+      }
+
+      /** Oculta o balão com fade-out. */
+      function hideBubble() {
+        clearTimeout(hideTimer);
+        bubble.classList.remove('visible');
+      }
+
+      return { changeState, speak, hideBubble, STATES };
+    })();
+  </script>
+</body>
+</html>

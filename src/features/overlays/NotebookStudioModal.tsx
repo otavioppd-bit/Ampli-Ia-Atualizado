@@ -3,6 +3,7 @@ import { useAppStore } from '../../stores/appStore';
 import { Modal } from '../../shared/ui/Modal';
 import { GlassCard } from '../../shared/ui/GlassCard';
 import { QuizQuestion } from '../../shared/types';
+import { askGemini, aiAvailable } from '../../shared/lib/aiService';
 import mermaid from 'mermaid';
 
 mermaid.initialize({ theme: 'dark', themeVariables: { primaryColor: '#f59e0b', primaryTextColor: '#fff', primaryBorderColor: '#f59e0b33', lineColor: '#f59e0b55', fontSize: '14px' } });
@@ -60,7 +61,7 @@ export function NotebookStudioModal() {
       return;
     }
 
-    if (apiKey) {
+    if (aiAvailable(apiKey)) {
       try {
         const notasText = notasList.slice(-10).map(n => `• ${n.text}`).join('\n');
         const prompt = `Com base nas seguintes anotações de estudante, gere um resumo executivo bem estruturado com seções claras, destacando os principais conceitos, conexões entre temas e pontos-chave que merecem revisão:\n\n${notasText}`;
@@ -91,7 +92,7 @@ export function NotebookStudioModal() {
       return;
     }
 
-    if (apiKey) {
+    if (aiAvailable(apiKey)) {
       try {
         const notasText = notasList.slice(-10).map(n => `• ${n.text}`).join('\n');
         const prompt = `Com base nestas anotações, crie um mapa mental no formato Mermaid (graph TD). Inclua pelo menos 8-12 nós conectados hierarquicamente. Mostre APENAS o código Mermaid, sem explicações:\n\n${notasText}`;
@@ -125,7 +126,7 @@ export function NotebookStudioModal() {
       return;
     }
 
-    if (apiKey) {
+    if (aiAvailable(apiKey)) {
       try {
         const notasText = withContent.slice(-8).map((n: any) => n.text).join('\n---\n');
         const prompt = `Com base nas anotações abaixo, gere 5 flashcards no formato de perguntas e respostas para revisão. Cada flashcard deve ter uma pergunta clara e uma resposta direta. Responda APENAS com um array JSON, sem formatação adicional:\n\n[{"pergunta": "...", "resposta": "..."}, ...]\n\nAnotações:\n${notasText}`;
@@ -181,7 +182,7 @@ export function NotebookStudioModal() {
       return;
     }
 
-    if (apiKey) {
+    if (aiAvailable(apiKey)) {
       try {
         const notasText = notasList.slice(-15).map(n => `• ${n.text}`).join('\n');
         const prompt = `Analise estas anotações de estudante e identifique:\n1. Quais conceitos aparecem com frequência (possíveis gaps de entendimento)\n2. Quais tópicos precisam de mais revisão\n3. Sugira 3 áreas de foco prioritário\n\nAnotações:\n${notasText}\n\nResponda em markdown com seções claras.`;
@@ -215,18 +216,7 @@ export function NotebookStudioModal() {
   }
 
   async function callGemini(prompt: string, key: string): Promise<string> {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
-      }),
-    });
-    if (!res.ok) throw new Error('Erro na API Gemini');
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return text;
+    return askGemini(prompt, null, key);
   }
 
   async function renderMermaid(code: string) {
@@ -356,7 +346,7 @@ export function NotebookStudioModal() {
         {!loading && !result && notasList.length > 0 && (
           <div className="text-center py-8">
             <p className="text-sm text-gray-400">Selecione uma ferramenta acima para processar suas anotações.</p>
-            {apiKey && <p className="text-xs text-amber-400 mt-2">⚡ IA disponível — resultados mais precisos</p>}
+            {aiAvailable(apiKey) && <p className="text-xs text-amber-400 mt-2">⚡ IA disponível — resultados mais precisos</p>}
           </div>
         )}
       </GlassCard>

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAppStore } from './stores/appStore';
 import { userRepository } from './shared/storage/UserRepository';
 import { supabaseRepository } from './shared/storage/SupabaseRepository';
@@ -10,6 +10,7 @@ import { ParentPage } from './features/parent/ParentPage';
 import { ParticleCanvas } from './features/atmo/ParticleCanvas';
 import { Toast } from './shared/ui/Toast';
 import { OnboardingTour } from './shared/ui/OnboardingTour';
+import { mascotStore } from './stores/mascotStore';
 import { GamificationState, ChatPersona } from './shared/types';
 import { getToday } from './shared/lib/utils';
 
@@ -17,6 +18,7 @@ export default function App() {
   const { isAuthenticated, userRole, setSession, updateGamification, setLogs, setNotas, setChatMessages, setPersonas, setActivePersonaId, setApiKey, gamification } = useAppStore();
   const { session } = useAppStore();
   const logs = useAppStore(s => s.logs);
+  const prevLevel = useRef(gamification.level);
 
   // Restore session + load data from Supabase if connected
   useEffect(() => {
@@ -85,6 +87,21 @@ export default function App() {
       updateGamification({ lastAccessDate: today, streak });
     }
   }, [isAuthenticated, userRole]);
+
+  // Mascote: comemora subida de nível
+  useEffect(() => {
+    if (!isAuthenticated || userRole !== 'student') return;
+    if (gamification.level > prevLevel.current) {
+      mascotStore.getState().setState('success', `🎉 Uau! Você subiu para o nível ${gamification.level}! Continue assim!`);
+    }
+    prevLevel.current = gamification.level;
+  }, [gamification.level, isAuthenticated, userRole]);
+
+  // Mascote: celebra streak novo (a partir de 2 dias)
+  useEffect(() => {
+    if (!isAuthenticated || userRole !== 'student' || gamification.streak < 2) return;
+    mascotStore.getState().setState('success', `🔥 ${gamification.streak} dias seguidos de estudo! Seu foco é inspirador!`);
+  }, [gamification.streak, isAuthenticated, userRole]);
 
   // Persist gamification to localStorage + Supabase
   useEffect(() => {

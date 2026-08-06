@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { MoodType, TabId, GamificationState, ChatMessage, Nota, LogEntry, DailyPlan, EssayCorrection, QuizResult, Session, ChatPersona, UserRole } from '../shared/types';
+import { MoodType, TabId, GamificationState, ChatMessage, Nota, LogEntry, DailyPlan, EssayCorrection, QuizResult, Session, ChatPersona, UserRole, ChallengeResult } from '../shared/types';
 import { calculateSSC } from '../shared/lib/sscCalculator';
 import { detectEmotion, getMoodColor } from '../shared/lib/emotionEngine';
 import { analyzeMoodWithAI } from '../shared/lib/aiService';
@@ -50,6 +50,9 @@ interface AppState {
 
   dailyPlan: DailyPlan | null;
 
+  challengeResults: ChallengeResult[];
+  challengeSeenTutorial: boolean;
+
   setSession: (session: Session | null) => void;
   logout: () => void;
   setActiveTab: (tab: TabId) => void;
@@ -83,8 +86,10 @@ interface AppState {
   setNotas: (notas: Nota[]) => void;
   addNota: (nota: Nota) => void;
   updateGamification: (g: Partial<GamificationState>) => void;
-  setChatMessages: (msgs: ChatMessage[]) => void;
+setChatMessages: (msgs: ChatMessage[]) => void;
   setLogs: (logs: LogEntry[]) => void;
+  addChallengeResult: (r: ChallengeResult) => void;
+  setChallengeSeenTutorial: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -124,11 +129,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   chatMessages: [],
   isMuted: false,
 
-  lastCorrection: null,
+lastCorrection: null,
   quizResults: [],
   notas: [],
   logs: [],
   dailyPlan: null,
+  challengeResults: (() => {
+    try {
+      const raw = localStorage.getItem('mm_challenge_results');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  })(),
+  challengeSeenTutorial: localStorage.getItem('mm_challenge_tutorial') === '1',
 
   setSession: (session) => {
     localStorage.removeItem('mm_chat_messages');
@@ -305,4 +319,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   setChatMessages: (msgs) => set({ chatMessages: msgs }),
   setLogs: (logs) => set({ logs }),
+
+  addChallengeResult: (r) => {
+    set((s) => {
+      const updated = [r, ...s.challengeResults].slice(0, 20);
+      localStorage.setItem('mm_challenge_results', JSON.stringify(updated));
+      return { challengeResults: updated };
+    });
+    supabaseRepository.saveLog({ timestamp: r.timestamp, type: 'essay', description: `Desafio concluído: ${r.tema} — ${r.notaFinal}/1000`, xp: r.xpGanho }).catch(() => {});
+  },
+
+  setChallengeSeenTutorial: (v) => {
+    if (v) localStorage.setItem('mm_challenge_tutorial', '1');
+    else localStorage.removeItem('mm_challenge_tutorial');
+    set({ challengeSeenTutorial: v });
+  },
 }));

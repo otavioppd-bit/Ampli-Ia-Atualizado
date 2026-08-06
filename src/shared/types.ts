@@ -98,6 +98,21 @@ export interface EssayCorrection {
   originalText: string;
 }
 
+export interface ChallengeResult {
+  id: string;
+  tema: string;
+  notaFinal: number;
+  competencia1: number;
+  competencia2: number;
+  competencia3: number;
+  competencia4: number;
+  competencia5: number;
+  xpGanho: number;
+  tempoUsadoSegundos: number;
+  finalizado: boolean; // enviado dentro do prazo
+  timestamp: number;
+}
+
 // ===== Quiz =====
 export interface QuizQuestion {
   id: string;

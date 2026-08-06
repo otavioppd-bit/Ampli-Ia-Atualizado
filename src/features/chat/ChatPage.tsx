@@ -4,7 +4,7 @@ import { searchKB, matchSubject, extractKeywords, SPECIAL_RESPONSES, buildKBFrom
 import { getEmpathicPrefix } from '../../shared/lib/emotionEngine';
 import { QUIZ_BANK } from '../../shared/lib/quizBank';
 import { ENEM_KB } from '../../shared/lib/kbEnem';
-import { askGemini } from '../../shared/lib/aiService';
+import { askGemini, aiAvailable } from '../../shared/lib/aiService';
 import { ChatMessage, Nota, ChatPersona } from '../../shared/types';
 import { playClick, speak, stopSpeech } from '../../shared/lib/sfx';
 import { PersonaManager } from '../../shared/ui/PersonaManager';
@@ -128,7 +128,7 @@ export function ChatPage() {
     if (inputRef.current) { inputRef.current.style.height = 'auto'; }
     const mood = await detectAndSetMood(text);
 
-    if (apiKey) {
+    if (aiAvailable(apiKey)) {
       setIsGenerating(true);
       try {
         abortRef.current = new AbortController();
@@ -226,7 +226,7 @@ export function ChatPage() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg md:text-xl font-bold text-white">{activePersona?.name || 'Mentor IA'}</h1>
-              {apiKey && (
+              {aiAvailable(apiKey) && (
                 <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/15 flex items-center gap-1">
                   <IconSparkles size={10} /> IA
                 </span>

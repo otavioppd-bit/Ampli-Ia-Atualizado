@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { userRepository } from '../../shared/storage/UserRepository';
 import { getProfile, saveProfile, getEscolasCadastradas, getTurmasCadastradas, salvarEscola, salvarTurma } from '../../shared/lib/rankingEngine';
+import { hasProxy, testGeneration } from '../../shared/lib/aiService';
 import type { Escola, Turma } from '../../shared/types';
 
 export function ProfilePage() {
@@ -11,6 +12,21 @@ export function ProfilePage() {
   const [meta, setMeta] = useState('');
   const [keyInput, setKeyInput] = useState(apiKey);
   const [showKey, setShowKey] = useState(false);
+  const [aiTest, setAiTest] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  const [aiTestMsg, setAiTestMsg] = useState('');
+
+  async function runAiTest() {
+    setAiTest('testing');
+    setAiTestMsg('');
+    try {
+      const r = (await testGeneration(apiKey)).slice(0, 120);
+      setAiTest('ok');
+      setAiTestMsg(r);
+    } catch (e) {
+      setAiTest('error');
+      setAiTestMsg(e instanceof Error ? e.message : 'Falha na conexão com a IA');
+    }
+  }
 
   const [escolaId, setEscolaId] = useState('');
   const [turmaId, setTurmaId] = useState('');
@@ -229,42 +245,98 @@ export function ProfilePage() {
             <p className="text-xs text-gray-500">Conecte sua IA para respostas no nível de pesquisador e suporte a estudos avançados.</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500 bg-amber-500/5 rounded-xl p-3 border border-amber-500/10 mb-4">
-          <span className="text-amber-400 shrink-0">💡</span>
-          <span>Use sua chave <strong className="text-gray-300">Gemini API</strong> (gratuita) do Google AI Studio. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-amber-400 underline">Obter chave grátis</a></span>
-        </div>
+        {hasProxy() ? (
+          <>
+            <div className="flex items-start gap-2.5 text-xs text-emerald-300 bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/15">
+              <span className="shrink-0">⚡</span>
+              <span><strong>IA via servidor (proxy grátis).</strong> A inteligência do Midnight Mentor já está configurada — nenhuma chave necessária e pronto para usar. A chave fica protegida no servidor.</span>
+            </div>
 
-        <div className="relative mb-4">
-          <input
-            type={showKey ? 'text' : 'password'}
-            value={keyInput}
-            onChange={e => setKeyInput(e.target.value)}
-            placeholder="Cole sua chave Gemini API aqui..."
-            className="w-full text-sm pr-10"
-          />
-          <button
-            onClick={() => setShowKey(!showKey)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 p-1.5"
-          >
-            {showKey ? '🙈' : '👁️'}
-          </button>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <button onClick={handleSaveKey} className="btn-primary flex-1" disabled={!keyInput.trim()}>
-            {keyInput.trim() === apiKey ? 'Conectado ✓' : 'Conectar IA'}
-          </button>
-          {apiKey && (
-            <button onClick={() => { setKeyInput(''); setApiKey(''); }} className="btn-ghost text-sm text-red-400 hover:text-red-300">
-              Remover
+            <button
+              onClick={runAiTest}
+              disabled={aiTest === 'testing'}
+              className="btn-secondary w-full mt-3"
+            >
+              {aiTest === 'testing' ? 'Testando conexão…' : '🧪 Testar conexão com a IA'}
             </button>
-          )}
-        </div>
 
-        {apiKey && (
-          <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/5 rounded-xl px-3 py-2 border border-emerald-500/10">
-            <span>✓</span> IA conectada. O chat usará IA generativa para respostas inteligentes.
-          </div>
+            {aiTest === 'ok' && (
+              <div className="flex items-start gap-2 text-xs text-emerald-300 bg-emerald-500/10 rounded-xl px-3 py-2.5 mt-2 border border-emerald-500/15">
+                <span className="shrink-0">✅</span>
+                <span>IA conectada! Resposta do modelo: <strong className="text-emerald-200">“{aiTestMsg}”</strong></span>
+              </div>
+            )}
+            {aiTest === 'error' && (
+              <div className="flex items-start gap-2 text-xs text-red-300 bg-red-500/10 rounded-xl px-3 py-2.5 mt-2 border border-red-500/15">
+                <span className="shrink-0">❌</span>
+                <span>Falha: <code className="text-red-200 break-all">{aiTestMsg}</code></span>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 text-xs text-gray-500 bg-amber-500/5 rounded-xl p-3 border border-amber-500/10 mb-4">
+              <span className="text-amber-400 shrink-0">💡</span>
+              <span>Use sua chave <strong className="text-gray-300">Gemini API</strong> (gratuita) do Google AI Studio. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-amber-400 underline">Obter chave grátis</a></span>
+            </div>
+
+            <div className="relative mb-4">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={keyInput}
+                onChange={e => setKeyInput(e.target.value)}
+                placeholder="Cole sua chave Gemini API aqui..."
+                className="w-full text-sm pr-10"
+              />
+              <button
+                onClick={() => setShowKey(!showKey)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 p-1.5"
+              >
+                {showKey ? '🙈' : '👁️'}
+              </button>
+            </div>
+
+            <div className="flex gap-2 mb-4">
+              <button onClick={handleSaveKey} className="btn-primary flex-1" disabled={!keyInput.trim()}>
+                {keyInput.trim() === apiKey ? 'Conectado ✓' : 'Conectar IA'}
+              </button>
+              {apiKey && (
+                <button onClick={() => { setKeyInput(''); setApiKey(''); }} className="btn-ghost text-sm text-red-400 hover:text-red-300">
+                  Remover
+                </button>
+              )}
+            </div>
+
+            {apiKey && (
+              <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/5 rounded-xl px-3 py-2 border border-emerald-500/10">
+                <span>✓</span> IA conectada. O chat usará IA generativa para respostas inteligentes.
+              </div>
+            )}
+
+            {apiKey && (
+              <>
+                <button
+                  onClick={runAiTest}
+                  disabled={aiTest === 'testing'}
+                  className="btn-secondary w-full mt-3 text-center"
+                >
+                  {aiTest === 'testing' ? 'Testando conexão…' : '🧪 Testar conexão com a IA'}
+                </button>
+                {aiTest === 'ok' && (
+                  <div className="flex items-start gap-2 text-xs text-emerald-300 bg-emerald-500/10 rounded-xl px-3 py-2.5 mt-2 border border-emerald-500/15">
+                    <span className="shrink-0">✅</span>
+                    <span>Conexão ok! Resposta: <em className="text-emerald-200">“{aiTestMsg}”</em></span>
+                  </div>
+                )}
+                {aiTest === 'error' && (
+                  <div className="flex items-start gap-2 text-xs text-red-300 bg-red-500/10 rounded-xl px-3 py-2.5 mt-2 border border-red-500/15">
+                    <span className="shrink-0">❌</span>
+                    <span>Falha: <code className="text-red-200 break-all">{aiTestMsg}</code></span>
+                  </div>
+                )}
+              </>
+            )}
+          </>
         )}
       </div>
 

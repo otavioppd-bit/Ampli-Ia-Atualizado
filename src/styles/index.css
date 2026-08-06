@@ -408,3 +408,350 @@
     }
   }
 }
+
+/* ==== Modo Desafio — experiência estilo prova ENEM ==== */
+.challenge-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(1100px 480px at 85% -10%, rgba(16, 185, 129, 0.10), transparent 60%),
+    radial-gradient(760px 420px at 0% 115%, rgba(245, 158, 11, 0.07), transparent 55%);
+}
+.challenge-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(11, 17, 32, 0.92) 100%);
+  pointer-events: none;
+}
+.challenge-timer {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.challenge-timer--warn {
+  animation: challengeBlink 1.4s ease-in-out infinite;
+}
+.challenge-q {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.challenge-note {
+  border-left: 3px solid rgba(16, 185, 129, 0.5);
+}
+.challenge-note--amber {
+  border-left-color: rgba(245, 158, 11, 0.5);
+}
+/* Folha estilo prova: linhas-guia para a redação */
+.challenge-sheet {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(148, 163, 184, 0.06) 31px 32px);
+  background-attachment: local;
+}
+/* Barra de progresso das palavras */
+.challenge-fill {
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.challenge-stat {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+}
+.challenge-stat:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+@keyframes challengeBlink {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+  50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+.challenge-card-decor {
+  animation: challengeFloat 5s ease-in-out infinite;
+}
+@keyframes challengeFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .challenge-timer--warn, .challenge-card-decor {
+    animation: none;
+  }
+}
+
+/* =========================================================
+   MASCOTE INTERATIVO — máquina de estados estilo Duolingo
+   Estados: idle | typing | loading | success | error
+   Animações aplicadas ao .mascot-img dentro do container.
+   ========================================================= */
+
+/* --- Container raiz --- */
+.mascot-container {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: visible;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  line-height: 0;
+}
+
+/* --- Imagem base do personagem --- */
+.mascot-img {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform-origin: 50% 100%;
+  display: block;
+}
+
+/* --- Sombra de apoio (chão / profundidade) --- */
+.mascot-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -4%;
+  width: 62%;
+  height: 10%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55), transparent 72%);
+  transform: translateX(-50%);
+  filter: blur(2px);
+  z-index: 0;
+}
+
+/* ---------- Idle (sagui meditando): flutuação suave / respiração ---------- */
+.mascot-anim-idle .mascot-img {
+  animation: mascotFloat 4.5s ease-in-out infinite;
+}
+@keyframes mascotFloat {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(-5px) scaleY(1.03) scaleX(0.98); }
+}
+
+/* ---------- Typing (caderno + lápis): balanço focado esporádico ---------- */
+.mascot-anim-typing .mascot-img {
+  animation: mascotWiggle 3.6s ease-in-out infinite;
+}
+@keyframes mascotWiggle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  12% { transform: translateY(-3px) rotate(-2.5deg); }
+  24% { transform: translateY(0) rotate(2deg); }
+  36% { transform: translateY(-2px) rotate(-1.5deg); }
+  48%, 100% { transform: translateY(0) rotate(0deg); }
+}
+
+/* ---------- Loading (IA avaliando): pulso + brilho + bounce leve ---------- */
+.mascot-anim-loading .mascot-img {
+  animation: mascotLoading 1.3s ease-in-out infinite;
+}
+.mascot-anim-loading::before {
+  content: '';
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.28), transparent 70%);
+  z-index: 0;
+  animation: mascotGlowPulse 1.3s ease-in-out infinite;
+}
+@keyframes mascotLoading {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-6px) scale(1.04); }
+}
+@keyframes mascotGlowPulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* ---------- Success (sagui pulando): bounce de entrada impactante ---------- */
+.mascot-anim-success .mascot-img {
+  animation: mascotSuccess 1.15s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes mascotSuccess {
+  0% { transform: scale(0.4) translateY(16px); opacity: 0; }
+  28% { transform: scale(1.16) translateY(-22px); opacity: 1; }
+  48% { transform: scale(0.9) translateY(0); }
+  64% { transform: scale(1.08) translateY(-10px); }
+  80% { transform: scale(0.96) translateY(0); }
+  92% { transform: scale(1.03) translateY(-4px); }
+  100% { transform: scale(1) translateY(0); }
+}
+
+/* ---------- Error: tremor (incentivo) ---------- */
+.mascot-anim-error .mascot-img {
+  animation: mascotShake 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes mascotShake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  15% { transform: translateX(-6px) rotate(-4deg); }
+  30% { transform: translateX(6px) rotate(4deg); }
+  45% { transform: translateX(-5px) rotate(-3deg); }
+  60% { transform: translateX(5px) rotate(3deg); }
+  75% { transform: translateX(-2px) rotate(-2deg); }
+}
+
+/* ---------- Transição/crossfade ao trocar de sprite ---------- */
+.mascot-sprite-entry {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.mascot-sprite-entry .mascot-img {
+  max-width: 92%;
+  animation: mascotSwap 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes mascotSwap {
+  0% { opacity: 0; transform: scale(0.85) translateY(8px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ---------- Confete (success) ---------- */
+.mascot-confetti {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  animation: mascotConfetti 1.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes mascotConfetti {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(var(--mx, 0px), var(--my, -70px)) rotate(var(--rot, 180deg)) scale(0.6); }
+}
+
+/* ---------- Balão de fala (dinâmico) ---------- */
+.mascot-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 14px);
+  transform: translateX(-50%);
+  min-width: 160px;
+  max-width: 240px;
+  padding: 12px 15px;
+  border-radius: 18px;
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  color: #f1f5f9;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  font-weight: 500;
+  text-align: center;
+  z-index: 3;
+  animation: mascotBubbleIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.mascot-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  background: inherit;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 2px;
+}
+.mascot-bubble-text {
+  display: block;
+  width: 100%;
+}
+@keyframes mascotBubbleIn {
+  0% { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.9); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+/* Balão lateral (variante flutuante, ex.: canto / tutor inline) */
+.mascot-bubble--floating {
+  left: auto;
+  right: calc(100% + 16px);
+  bottom: 50%;
+  transform: translateY(50%);
+  width: max-content;
+  max-width: 240px;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+}
+.mascot-bubble--floating::after {
+  left: 100%;
+  bottom: 50%;
+  transform: translateY(50%) rotate(-45deg);
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+@keyframes mascotBubbleInFab {
+  0% { opacity: 0; transform: translateY(50%) translateX(10px) scale(0.9); }
+  100% { opacity: 1; transform: translateY(50%) translateX(0) scale(1); }
+}
+.mascot-bubble--floating {
+  animation: mascotBubbleInFab 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Pontos animados de "pensando" no balão durante loading */
+.mascot-dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.mascot-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fbbf24;
+  animation: mascotDot 1s ease-in-out infinite;
+}
+.mascot-dots span:nth-child(2) { animation-delay: 0.15s; }
+.mascot-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes mascotDot {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Brilho ambiente (flutuação constante nas bordas - modo flutuante) */
+.mascot-up-top::before,
+.mascot-up-top::after {
+  content: '';
+  position: absolute;
+  top: -6%;
+  width: 12px;
+  height: 12px;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.9), rgba(251, 191, 36, 0) 70%);
+  border-radius: 50%;
+  z-index: 0;
+  animation: mascotOrbit 6s ease-in-out infinite;
+}
+.mascot-up-top::before { left: 2%; animation-delay: 1s; }
+.mascot-up-top::after { right: 2%; animation-delay: 3.5s; }
+@keyframes mascotOrbit {
+  0%, 100% { opacity: 0; transform: translateY(0) scale(0.6); }
+  40% { opacity: 1; transform: translateY(-16px) scale(1); }
+  60% { opacity: 0; transform: translateY(-30px) scale(0.4); }
+}
+
+/* ---------- Redução de movimento (acessibilidade) ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .mascot-img, .mascot-bubble, .mascot-confetti, .mascot-shadow,
+  .mascot-up-top::before, .mascot-up-top::after, .mascot-dots span {
+    animation: none !important;
+    opacity: 1;
+  }
+  .mascot-anim-success .mascot-img {
+    animation: none !important;
+    transform: none;
+    opacity: 1;
+  }
+}

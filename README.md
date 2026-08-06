@@ -173,11 +173,32 @@ npm run preview
 
 ## API de IA
 
-O app usa **Google Gemini 2.0 Flash**. O usuário configura sua própria chave no Perfil.
+O app usa **Google Gemini 2.0 Flash** (camada gratuita).
 
-```ts
-POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={API_KEY}
-```
+### Modo 1 — Proxy serverless grátis (recomendado: sem chave para o usuário)
+
+A chave fica no **seu** servidor, protegida. O estudante não precisa digitar nada.
+
+1. Crie uma chave **grátis**: https://aistudio.google.com/apikey
+2. Deploy do proxy em `server/worker.js` (Cloudflare Workers):
+   ```bash
+   npx wrangler login
+   npx wrangler deploy server/worker.js --name midnight-mentor-ia
+   npx wrangler secret put GEMINI_API_KEY   # cole sua chave grátis
+   npx wrangler secret put API_TOKEN        # opcional: senha anti-abuso
+   ```
+3. Configure no `.env`:
+   ```
+   VITE_AI_BASE_URL=https://seu-worker.workers.dev
+   VITE_AI_PROXY_TOKEN=seu-token            # mesmo valor do API_TOKEN
+   ```
+4. Build + deploy normal. Pronto: **todos** os alunos usam a IA na sua cota grátis.
+
+### Modo 2 — Chave do próprio usuário
+
+Sem `VITE_AI_BASE_URL`, cada aluno cola a própria chave grátis no **Perfil**.
+
+- Sem nenhuma das opções, o app funciona **offline** (fallback local em chat/quiz/redação).
 
 Usos:
 - Geração de questões de quiz

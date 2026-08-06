@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { QuizQuestion, QuizResult } from '../../shared/types';
-import { generateQuizQuestions } from '../../shared/lib/aiService';
+import { generateQuizQuestions, aiAvailable } from '../../shared/lib/aiService';
 import { playCorrect, playError, playLevelUp } from '../../shared/lib/sfx';
+import { mascotStore } from '../../stores/mascotStore';
 
 type Stage = 'select' | 'topics' | 'playing' | 'result';
 
@@ -89,10 +90,12 @@ export function QuizPage() {
   const startQuiz = useCallback(async () => {
     if (!materia || selectedTopics.length === 0) return;
     setGenerating(true);
+    mascotStore.getState().setState('loading', 'Gerando suas questões com a IA');
     try {
-      if (!apiKey) {
+      if (!aiAvailable(apiKey)) {
         setToast('Configure sua chave da API Gemini no Perfil para gerar quizzes.', 'error');
         setGenerating(false);
+        mascotStore.getState().setState('error', 'Preciso da sua chave da IA no Perfil para criar as questões!');
         return;
       }
       const topicPrompt = selectedTopics.includes('Geral')
@@ -104,13 +107,16 @@ export function QuizPage() {
         setQuestions(parsed.map(q => ({ ...q, materia })));
         setCurrentIndex(0); setSelectedAlt(null); setShowExplanation(false); setAcertos(0); setResult(null);
         setStage('playing');
+        mascotStore.getState().setState('idle', 'Respira fundo e leia a questão com calma. 📖');
       } else {
         setToast('Não foi possível gerar questões. Tente outros tópicos.', 'error');
         setStage('topics');
+        mascotStore.getState().setState('error', 'Não consegui gerar as questões. Tenta outros tópicos!');
       }
     } catch (e: any) {
       setToast(e?.message || 'Erro ao gerar questões', 'error');
       setStage('topics');
+      mascotStore.getState().setState('error', 'Ops! Algo deu errado ao gerar as questões.');
     }
     setGenerating(false);
   }, [materia, selectedTopics, apiKey, setToast]);
@@ -125,8 +131,14 @@ export function QuizPage() {
     if (selectedAlt !== null) return;
     setSelectedAlt(idx);
     setShowExplanation(true);
-    if (idx === questions[currentIndex].correta) { setAcertos(p => p + 1); if (!isMuted) playCorrect(); }
-    else { if (!isMuted) playError(); }
+    if (idx === questions[currentIndex].correta) {
+      setAcertos(p => p + 1);
+      if (!isMuted) playCorrect();
+      mascotStore.getState().setState('success', 'Mandou bem! 🎉 Resposta certa!');
+    } else {
+      if (!isMuted) playError();
+      mascotStore.getState().setState('error', 'Quase! Dá uma olhada na explicação e tenta de novo! 💪');
+    }
   }
 
   function nextQuestion() {
@@ -141,6 +153,7 @@ export function QuizPage() {
     setResult(res); addQuizResult(res); addXP(xpGanho);
     addLog({ timestamp: Date.now(), type: 'quiz', description: `Quiz de ${materia}: ${acertos}/${questions.length}`, xp: xpGanho });
     if (!isMuted && xpGanho > 0) playLevelUp();
+    mascotStore.getState().setState('success', `🎉 Quiz concluído! +${xpGanho} XP de bônus — meta cumprida!`);
     setStage('result');
   }
 
@@ -169,7 +182,7 @@ export function QuizPage() {
           ))}
         </div>
 
-        {!apiKey && (
+        {!aiAvailable(apiKey) && (
           <div className="glass rounded-2xl p-4 border border-amber-500/10 bg-amber-500/5">
             <p className="text-sm text-amber-400 flex items-center gap-2">
               <span>⚠️</span>

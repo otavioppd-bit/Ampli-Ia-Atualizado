@@ -1,6 +1,93 @@
 import { ChatPersona } from '../types';
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const MAX_RETRIES = 3;
+
+/* ============================================================
+   PROXY SERVERLESS (grátis — a chave fica no servidor)
+   Defina no .env:
+     VITE_AI_BASE_URL  = URL do seu Worker/Function
+                         (ex.: https://midnight-mentor-ia.workers.dev)
+     VITE_AI_PROXY_TOKEN = token opcional de autenticação
+   Quando VITE_AI_BASE_URL está definido, o app usa o proxy e o
+   usuário NÃO precisa informar chave. Caso contrário, cai no
+   Gemini direto (chave do usuário).
+   ============================================================ */
+const PROXY_URL = ((import.meta.env.VITE_AI_BASE_URL as string) || '').replace(/\/+$/, '');
+const PROXY_TOKEN = (import.meta.env.VITE_AI_PROXY_TOKEN as string) || '';
+const PROXY_MODEL = (import.meta.env.VITE_AI_MODEL as string) || 'gemini-2.0-flash';
+
+/** Proxy configurado? (modo "sem chave do usuário"). */
+export const hasProxy = () => PROXY_URL.length > 0;
+
+/** IA está disponível de alguma forma (chave do usuário OU proxy). */
+export const aiAvailable = (apiKey: string) => Boolean(apiKey.trim()) || hasProxy();
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+interface RetryResult {
+  ok: boolean;
+  status: number;
+  data: any;
+  error: string | null;
+}
+
+// Garante que uma chamada ao Gemini não falhe por uma simples instabilidade
+// de rede / resposta interrompida ("streaming response failed").
+async function fetchGemini(url: string, init: RequestInit, signal?: AbortSignal): Promise<RetryResult> {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, { ...init, signal });
+      if (res.ok) {
+        return { ok: true, status: res.status, data: await res.json(), error: null };
+      }
+      // Erros 5xx e 429 (rate limit) são transitórios -> tenta de novo
+      if (res.status === 429 || res.status >= 500) {
+        if (attempt === MAX_RETRIES - 1) {
+          const err = await res.text();
+          return { ok: false, status: res.status, data: null, error: err };
+        }
+        await sleep(600 * (attempt + 1));
+        continue;
+      }
+      // 400/403 = chave inválida, não adianta repetir
+      const err = await res.text();
+      return { ok: false, status: res.status, data: null, error: err };
+    } catch (e) {
+      // Falha de rede (fetch lança TypeError) — causa comum do "streaming response failed"
+      if (attempt === MAX_RETRIES - 1) throw e;
+      await sleep(700 * (attempt + 1));
+    }
+  }
+  return { ok: false, status: 0, data: null, error: 'Falha na conexão com a IA' };
+}
+
+/* Envia o payload para o proxy (modo serverless) ou direto ao Gemini. */
+async function sendToAI(
+  body: {
+    systemInstruction?: { parts: { text: string }[] };
+    contents: { parts: any[] }[];
+    generationConfig: Record<string, unknown>;
+  },
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<RetryResult> {
+  if (hasProxy()) {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (PROXY_TOKEN) headers['Authorization'] = `Bearer ${PROXY_TOKEN}`;
+    return fetchGemini(
+      `${PROXY_URL}/generate`,
+      { method: 'POST', headers, signal, body: JSON.stringify({ provider: 'gemini', model: PROXY_MODEL, ...body }) },
+      signal,
+    );
+  }
+  return fetchGemini(`${GEMINI_URL}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal,
+    body: JSON.stringify(body),
+  }, signal);
+}
 
 function extractGeminiText(data: any): string {
   if (!data) return '';
@@ -44,35 +131,31 @@ export async function askGemini(
     }
   }
 
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    signal,
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemInstruction }] },
-      contents: [{ parts }],
-      generationConfig: {
-        temperature: 0.35,
-        maxOutputTokens: 1024,
-        topP: 0.85,
-        topK: 20,
-      },
-    }),
-  });
+  const res = await sendToAI({
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    contents: [{ parts }],
+    generationConfig: {
+      temperature: 0.35,
+      maxOutputTokens: 1024,
+      topP: 0.85,
+      topK: 20,
+    },
+  }, apiKey, signal);
 
   if (!res.ok) {
-    const err = await res.text();
+    if (hasProxy()) {
+      throw new Error(`Erro na IA: ${res.error || 'falha do servidor'}`);
+    }
     if (res.status === 403 || res.status === 400) {
       throw new Error('API key inválida ou sem permissão. Verifique sua chave do Google AI Studio.');
     }
     if (res.status === 429) {
       throw new Error('Limite de requisições excedido. Aguarde um momento e tente novamente.');
     }
-    throw new Error(`Erro na API: ${err}`);
+    throw new Error(`Erro na API: ${res.error}`);
   }
 
-  const data = await res.json();
-  const text = extractGeminiText(data) || 'Desculpe, não consegui gerar uma resposta.';
+  const text = extractGeminiText(res.data) || 'Desculpe, não consegui gerar uma resposta.';
   return text;
 }
 
@@ -87,23 +170,18 @@ export async function generateQuizQuestions(
     ? `Gere ${count} questões de ${subject} abrangendo tópicos essenciais e representativos da matéria para o ENEM. Inclua alternativas rotuladas A, B, C, D e marque a resposta correta como "Resposta: <letra>".`
     : `Gere ${count} questões de ${subject} focadas no tema "${topic}" para o ENEM. Mantenha o nível acadêmico e explique brevemente a justificativa da resposta correta.`;
 
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemInstruction }] },
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.45, maxOutputTokens: 4096, topP: 0.9, topK: 20 },
-    }),
-  });
+  const res = await sendToAI({
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.45, maxOutputTokens: 4096, topP: 0.9, topK: 20 },
+  }, apiKey);
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Erro ao gerar questões: ${err}`);
+    if (hasProxy()) throw new Error(`Erro ao gerar questões: ${res.error || 'falha do servidor'}`);
+    throw new Error(`Erro ao gerar questões: ${res.error}`);
   }
 
-  const data = await res.json();
-  return extractGeminiText(data) || 'Erro ao gerar questões.';
+  return extractGeminiText(res.data) || 'Erro ao gerar questões.';
 }
 
 export async function correctEssayWithAI(
@@ -142,23 +220,18 @@ Formato de resposta (apenas JSON):
 Redação:
 ${text}`;
 
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: 'Você é um corretor experiente de redações ENEM. Responda apenas com JSON.' }] },
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 2048, topP: 0.9, topK: 20 },
-    }),
-  });
+  const res = await sendToAI({
+    systemInstruction: { parts: [{ text: 'Você é um corretor experiente de redações ENEM. Responda apenas com JSON.' }] },
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 2048, topP: 0.9, topK: 20 },
+  }, apiKey);
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Erro na correção: ${err}`);
+    if (hasProxy()) throw new Error(`Erro na correção: ${res.error || 'falha do servidor'}`);
+    throw new Error(`Erro na correção: ${res.error}`);
   }
 
-  const data = await res.json();
-  return extractGeminiText(data);
+  return extractGeminiText(res.data);
 }
 
 export async function analyzeMoodWithAI(text: string, apiKey: string): Promise<string> {
@@ -175,22 +248,34 @@ Responda APENAS com um JSON sem formatação adicional:
 Texto:
 ${text}`;
 
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: 'Você é um analista emocional especializado em detectar estados psicológicos através da escrita. Responda apenas com JSON.' }] },
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 512, topP: 0.9, topK: 20 },
-    }),
-  });
+  const res = await sendToAI({
+    systemInstruction: { parts: [{ text: 'Você é um analista emocional especializado em detectar estados psicológicos através da escrita. Responda apenas com JSON.' }] },
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 512, topP: 0.9, topK: 20 },
+  }, apiKey);
 
   if (!res.ok) {
-    throw new Error(`Erro na análise de humor: ${await res.text()}`);
+    if (hasProxy()) throw new Error(`Erro na análise de humor: ${res.error || 'falha do servidor'}`);
+    throw new Error(`Erro na análise de humor: ${res.error}`);
   }
 
-  const data = await res.json();
-  return extractGeminiText(data);
+  return extractGeminiText(res.data);
 }
 
 export const QUIZ_TOPICS_CACHE_KEY = 'mm_quiz_topics_cache';
+
+/**
+ * Testa a conexão de ponta a ponta (proxy OU chave direta).
+ * Retorna a resposta do modelo (ex.: "OK") — lança erro se falhar.
+ */
+export async function testGeneration(apiKey: string): Promise<string> {
+  const reply = await askGemini(
+    'Responda apenas com a palavra: OK.',
+    null,
+    apiKey,
+  );
+  const clean = (reply || '').trim();
+  return clean.length > 0 ? clean : 'OK';
+}
+
+export { fetchGemini };
