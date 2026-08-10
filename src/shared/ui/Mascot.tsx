@@ -21,6 +21,10 @@ interface MascotProps {
   confetti?: boolean;
   /** Exibir o balão de fala. */
   speech?: boolean;
+  /** Modo meditação: respiração lenta e contínua (ignora a animação padrão do estado). */
+  breathing?: boolean;
+  /** Modo tutorial: personagem simulando fala (boca se movendo + barras de áudio). */
+  talking?: boolean;
 }
 
 interface Particle {
@@ -54,6 +58,8 @@ export function Mascot({
   variant = 'inline',
   confetti = true,
   speech = true,
+  breathing = false,
+  talking = false,
 }: MascotProps) {
   const { state: storeState, message: storeMessage, messageId } = mascotStore();
 
@@ -63,6 +69,8 @@ export function Mascot({
 
   const sprite = MASCOT_SPRITE[state];
   const animClass = MASCOT_ANIM[state];
+  const talkClass = talking ? 'mascot-anim-talk' : '';
+  const breathClass = breathing ? 'mascot-anim-breathing' : '';
   const defaultMsg = MASCOT_DEFAULT_MSG[state];
   const bubbleText = controlledMessage !== undefined
     ? controlledMessage
@@ -81,14 +89,14 @@ export function Mascot({
 
   return (
     <div
-      className={`mascot-container ${animClass} ${variant === 'floating' ? 'mascot-up-top' : ''}`}
+      className={`mascot-container ${animClass} ${breathClass} ${talkClass} ${variant === 'floating' ? 'mascot-up-top' : ''}`}
       style={{ width: size, height: size }}
       aria-label="Mascote do Midnight Mentor"
       role="img"
     >
       <div className="mascot-shadow" />
 
-      {/* Sprite keyed por estado -> dispara a microinteração de entrada */}
+      {/* Sprint keyed por estado -> dispara a microinteração de entrada */}
       <div key={`${rev}:${sprite}`} className="mascot-sprite-entry">
         <img src={sprite} alt="" draggable={false} className="mascot-img" />
       </div>
@@ -117,12 +125,26 @@ export function Mascot({
           className={variant === 'floating' ? 'mascot-bubble mascot-bubble--floating' : 'mascot-bubble'}
         >
           <span className="mascot-bubble-text">{bubbleText}</span>
+          {talking && (
+            <span className="mm-talk-bars" aria-label="Falando">
+              <span /><span /><span /><span />
+            </span>
+          )}
           {isLoading && (
             <span className="mascot-dots" aria-label="Pensando">
               <span /><span /><span />
             </span>
           )}
         </div>
+      )}
+
+      {/* Halos de respiração da meditação */}
+      {breathing && (
+        <>
+          <span className="mm-breathe-ring" />
+          <span className="mm-breathe-ring mm-breathe-ring--2" />
+          <span className="mm-breathe-ring mm-breathe-ring--3" />
+        </>
       )}
     </div>
   );

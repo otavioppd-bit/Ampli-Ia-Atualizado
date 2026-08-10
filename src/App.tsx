@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from './stores/appStore';
 import { userRepository } from './shared/storage/UserRepository';
 import { supabaseRepository } from './shared/storage/SupabaseRepository';
@@ -10,6 +10,7 @@ import { ParentPage } from './features/parent/ParentPage';
 import { ParticleCanvas } from './features/atmo/ParticleCanvas';
 import { Toast } from './shared/ui/Toast';
 import { OnboardingTour } from './shared/ui/OnboardingTour';
+import { LevelUpOverlay } from './shared/ui/LevelUpOverlay';
 import { mascotStore } from './stores/mascotStore';
 import { GamificationState, ChatPersona } from './shared/types';
 import { getToday } from './shared/lib/utils';
@@ -19,6 +20,7 @@ export default function App() {
   const { session } = useAppStore();
   const logs = useAppStore(s => s.logs);
   const prevLevel = useRef(gamification.level);
+  const [levelUp, setLevelUp] = useState<number | null>(null);
 
   // Restore session + load data from Supabase if connected
   useEffect(() => {
@@ -93,6 +95,7 @@ export default function App() {
     if (!isAuthenticated || userRole !== 'student') return;
     if (gamification.level > prevLevel.current) {
       mascotStore.getState().setState('success', `🎉 Uau! Você subiu para o nível ${gamification.level}! Continue assim!`);
+      setLevelUp(gamification.level);
     }
     prevLevel.current = gamification.level;
   }, [gamification.level, isAuthenticated, userRole]);
@@ -154,6 +157,7 @@ export default function App() {
       <AppShell />
       <Toast />
       <OnboardingTour />
+      <LevelUpOverlay open={levelUp !== null} level={levelUp ?? 1} onClose={() => setLevelUp(null)} />
     </>
   );
 }

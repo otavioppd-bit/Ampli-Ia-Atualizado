@@ -3,255 +3,345 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mascote Interativo — Midnight Mentor</title>
+<title>Microinterações do Sagui — Demonstração Funcional</title>
 <style>
   /* ============================================================
-     MASCOTE INTERATIVO — Midnight Mentor
-     Estados: idle | typing | loading | success (+ error)
+     DEMO FUNCIONAL — Sagui (mascote) Midnight Mentor
+     4 microinterações: meditação, tutorial, XP, aprovação
      ============================================================ */
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     background: radial-gradient(1200px 600px at 80% -10%, rgba(245,158,11,.08), transparent 60%),
+                radial-gradient(900px 500px at 10% 110%, rgba(16,185,129,.08), transparent 60%),
                 #0b1120;
     min-height: 100vh;
     color: #e2e8f0;
+    overflow-x: hidden;
   }
 
-  /* ---------- 1. HTML Estrutural ---------- */
-  #mascot-container {
-    position: fixed;
-    right: 24px;
-    bottom: 24px;
-    z-index: 9999;
-    width: 120px;
-    height: 120px;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
+  /* ================== PAINEL ================== */
+  .panel {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
   }
-
-  #mascot-img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-    transform-origin: 50% 100%;
-    opacity: 1;
-    /* cross-fade suave ao trocar o src */
-    transition: opacity 0.3s ease;
-    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
-  }
-
-  /* Balão de fala: oculto por padrão, fade-in via .visible */
-  #speech-bubble {
-    position: absolute;
-    right: calc(100% + 14px);
-    bottom: 50%;
-    transform: translateY(50%) translateX(8px) scale(0.92);
-    min-width: 150px;
-    max-width: 240px;
-    padding: 12px 15px;
-    background: rgba(17, 24, 39, 0.95);
+  .panel h1 { font-size: 22px; font-weight: 800; text-align: center; color: #fff; }
+  .panel h1 span { color: #fbbf24; }
+  .panel .sub { text-align: center; font-size: 13px; color: #64748b; margin: 6px 0 26px; }
+  .demo-card {
+    background: rgba(17, 24, 39, 0.82);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    color: #f1f5f9;
-    font-size: 13px;
-    line-height: 1.45;
-    font-weight: 500;
-    text-align: center;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(.34,1.56,.64,1), visibility 0.3s;
-    z-index: 2;
+    border-radius: 18px;
+    padding: 20px;
+    margin-bottom: 16px;
   }
-  #speech-bubble::after {
-    content: '';
-    position: absolute;
-    left: 100%;
-    bottom: 50%;
-    width: 14px;
-    height: 14px;
-    background: inherit;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
-    transform: translateY(50%) rotate(45deg);
+  .demo-card h3 { font-size: 15px; color: #fbbf24; margin-bottom: 4px; }
+  .demo-card p  { font-size: 12px; color: #94a3b8; margin-bottom: 14px; }
+  .demo-stage {
+    position: relative;
+    min-height: 220px;
+    border: 1px dashed rgba(255,255,255,.1);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255,255,255,.015);
   }
-  #speech-bubble.visible {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(50%) translateX(0) scale(1);
-  }
-
-  /* ---------- 2. Animações @keyframes por estado ---------- */
-  .state-idle    img { animation: floatY  4s ease-in-out infinite; }
-  .state-typing  img { animation: wiggle  3.6s ease-in-out infinite; }
-  .state-loading img { animation: pulseL  1.3s ease-in-out infinite; }
-  .state-success img { animation: bounce  1.15s cubic-bezier(.22,1,.36,1) both; }
-  .state-error   img { animation: shake   0.9s cubic-bezier(.22,1,.36,1) both; }
-
-  @keyframes floatY {
-    0%, 100% { transform: translateY(0); }
-    50%      { transform: translateY(-3px); }
-  }
-  @keyframes wiggle {
-    0%, 100% { transform: rotate(0deg); }
-    25%      { transform: rotate(-2deg); }
-    75%      { transform: rotate(2deg); }
-  }
-  @keyframes pulseL {
-    0%, 100% { transform: scale(1); }
-    50%      { transform: scale(1.04) translateY(-3px); }
-  }
-  @keyframes bounce {
-    0%   { transform: scale(.4) translateY(16px); opacity: 0; }
-    30%  { transform: scale(1.15) translateY(-22px); opacity: 1; }
-    50%  { transform: scale(.9) translateY(0); }
-    70%  { transform: scale(1.07) translateY(-10px); }
-    85%  { transform: scale(.96) translateY(0); }
-    100% { transform: scale(1) translateY(0); }
-  }
-  @keyframes shake {
-    0%, 100% { transform: translateX(0) rotate(0deg); }
-    20%      { transform: translateX(-5px) rotate(-4deg); }
-    40%      { transform: translateX(5px) rotate(4deg); }
-    60%      { transform: translateX(-4px) rotate(-3deg); }
-    80%      { transform: translateX(4px) rotate(3deg); }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    #mascot-container img, #speech-bubble {
-      animation: none !important;
-      transition-duration: 0.01ms !important;
-    }
-  }
-
-  /* ---------- Painel de teste ---------- */
-  .test-panel {
-    position: fixed;
-    top: 24px;
-    left: 24px;
-    z-index: 9998;
-    max-width: 320px;
-    padding: 16px;
-    background: rgba(17, 24, 39, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    color: #e2e8f0;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  }
-  .test-panel h3 { font-size: 14px; margin-bottom: 12px; color: #fbbf24; }
-  .test-panel p  { font-size: 11px; color: #64748b; margin-bottom: 10px; }
-  .test-panel .row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-  .test-panel button {
-    padding: 8px 12px;
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  button {
+    padding: 9px 14px;
     border: none;
     border-radius: 10px;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
     color: #0f172a;
     background: linear-gradient(135deg, #f59e0b, #d97706);
-    transition: transform 0.15s ease;
+    transition: transform .15s ease, box-shadow .15s ease;
+    box-shadow: 0 4px 14px rgba(245,158,11,.25);
   }
-  .test-panel button:hover { transform: translateY(-1px); }
-  .test-panel button.ghost { background: rgba(255,255,255,.08); color: #cbd5e1; }
+  button:hover { transform: translateY(-1px); }
+  button.ghost { background: rgba(255,255,255,.08); color: #cbd5e1; box-shadow: none; }
+
+  /* ============ 1. SAGUI RESPIRANDO (meditação) ============ */
+  #breath-sagui {
+    position: absolute;
+    right: 8px;
+    bottom: 6px;
+    width: 140px;
+    height: 140px;
+    object-fit: contain;
+    transform-origin: 50% 90%;
+    filter: drop-shadow(0 14px 22px rgba(0,0,0,.5));
+    animation: breathe 4s ease-in-out infinite alternate;
+  }
+  @keyframes breathe {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05) translateY(-4px); }
+    100% { transform: scale(1); }
+  }
+  .breath-hint {
+    position: absolute;
+    right: 110px;
+    bottom: 40px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #34d399;
+    font-size: 15px;
+    opacity: 0;
+    animation: phText 8s ease-in-out infinite;
+  }
+  @keyframes phText { 0%,100% {opacity:0} 10% {opacity:1} 20% {opacity:0} 50% {opacity:0} 60%{opacity:1} 70%{opacity:0} }
+  .breath-ring {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    border: 2px solid rgba(16,185,129,.35);
+    transform: translate(-50%,-50%) scale(.5);
+    opacity: 0;
+    animation: ringBreath 5s ease-in-out infinite;
+  }
+  @keyframes ringBreath {
+    0%,100% { opacity:0; transform: translate(-50%,-50%) scale(.5); }
+    25% { opacity:.8; transform: translate(-50%,-50%) scale(1); }
+    60% { opacity:0; transform: translate(-50%,-50%) scale(1.25); }
+  }
+
+  /* ============ 2. TUTORIAL: sagúi + setas pulsantes ============ */
+  #tutor-sagui {
+    position: absolute;
+    left: 6px; bottom: 6px;
+    width: 120px; height: 120px;
+    object-fit: contain;
+    transform-origin: 50% 90%;
+    filter: drop-shadow(0 12px 18px rgba(0,0,0,.5));
+    animation: talk 1.2s ease-in-out infinite;
+  }
+  @keyframes talk {
+    0%,100% { transform: scaleY(1); }
+    35% { transform: scaleY(.95) scaleX(1.02); }
+    65% { transform: scaleY(1.04); }
+  }
+  .demo-target {
+    position: absolute;
+    right: 20px; top: 26px;
+    width: 150px;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.06);
+    border: 2px solid rgba(245,158,11,.7);
+    font-size: 12px;
+    text-align: center;
+    color: #fbbf24;
+    font-weight: 700;
+    box-shadow: 0 0 0 4px rgba(245,158,11,.12);
+  }
+  .demo-arrow {
+    position: fixed;
+    width: 40px; height: 40px;
+    pointer-events: none;
+    animation: arrowPulse 1.3s ease-in-out infinite;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,.5));
+  }
+  @keyframes arrowPulse {
+    0%,100% { transform: translate(0,0); opacity:.55; }
+    30% { opacity:1; }
+    65% { transform: translate(0,10px); }
+  }
+
+  /* ============ 3. MARCO DE LIÇÃO (XP) ============ */
+  .overlay {
+    position: fixed; inset: 0;
+    z-index: 50;
+    display: none;
+    align-items: center; justify-content: center;
+    background: rgba(11,17,32,.78);
+    backdrop-filter: blur(10px);
+  }
+  .overlay.open { display: flex; }
+  .milestone-panel {
+    position: relative;
+    width: 92%; max-width: 380px;
+    background: rgba(17,24,39,.95);
+    border: 1px solid rgba(245,158,11,.25);
+    border-radius: 22px;
+    padding: 76px 24px 26px;
+    text-align: center;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55);
+    animation: panelIn .55s cubic-bezier(.34,1.56,.64,1) both;
+  }
+  @keyframes panelIn { 0% {opacity:0; transform: scale(.85) translateY(24px);} 100% {opacity:1; transform: scale(1) translateY(0);} }
+
+  .mascot-drop {
+    position: absolute;
+    top: -62px; left: 50%;
+    width: 150px; height: 150px;
+    transform: translateX(-50%);
+    animation: mascotDrop .8s cubic-bezier(.22,1,.36,1) both;
+  }
+  .mascot-drop img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 14px 22px rgba(0,0,0,.5));
+  }
+  @keyframes mascotDrop {
+    0% { transform: translate(-50%,-300px) rotate(-5deg); opacity:0; }
+    45% { transform: translate(-50%,0) rotate(2deg); opacity:1; }
+    60% { transform: translate(-50%,-24px) rotate(0); }
+    78% { transform: translate(-50%,0); }
+    88% { transform: translate(-50%,-9px); }
+    100% { transform: translate(-50%,0); }
+  }
+
+  .xp-shine {
+    font-size: 54px; font-weight: 900;
+    background: linear-gradient(135deg,#fbbf24,#f59e0b,#fde68a);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: xpPop .9s cubic-bezier(.22,1,.36,1) both;
+  }
+  @keyframes xpPop {
+    0% { transform: scale(.2) translateY(30px); opacity:0; }
+    35% { transform: scale(1.25) translateY(-12px); opacity:1; }
+    55% { transform: scale(.92) translateY(2px); }
+    75% { transform: scale(1.1) translateY(-4px); }
+    100% { transform: scale(1) translateY(0); }
+  }
+  .milestone-panel p { font-size: 13px; color: #94a3b8; margin-top: 10px; }
+  .milestone-panel button { margin-top: 18px; }
+
+  .approach-bubble {
+    position: absolute;
+    top: -6px; right: -46px;
+    max-width: 200px;
+    padding: 9px 13px;
+    border-radius: 14px;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(252,211,77,.35);
+    color: #fef3c7;
+    font-size: 12px;
+    font-weight: 600;
+    animation: bubbleIn .9s .5s cubic-bezier(.34,1.56,.64,1) both;
+  }
+  @keyframes bubbleIn { 0% {opacity:0; transform: scale(.2);} 100% {opacity:1; transform: scale(1);} }
+
+  .confetti-piece {
+    position: absolute;
+    top: 40%; left: var(--l);
+    width: 9px; height: 9px;
+    border-radius: 3px;
+    background: var(--c);
+    animation: confFly 1.3s cubic-bezier(.22,1,.36,1) forwards;
+  }
+  @keyframes confFly {
+    0% { opacity:1; transform: translate(0,0) rotate(0) scale(1); }
+    100% { opacity:0; transform: translate(var(--x),var(--y)) rotate(var(--r)) scale(.5); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #breath-sagui, .breath-ring, #tutor-sagui, .demo-arrow,
+    .mascot-drop, .xp-shine, .approach-bubble, .confetti-piece, .milestone-panel {
+      animation: none !important;
+    }
+  }
 </style>
 </head>
 <body>
 
-  <!-- ============================================================
-       1. MASCOTE (estrutura principal)
-       ============================================================ -->
-  <div id="mascot-container" class="state-idle">
-    <div id="speech-bubble"><span id="speech-text"></span></div>
-    <img id="mascot-img" src="/mascot-meditate.png" alt="Mascote Midnight Mentor">
-  </div>
+  <main class="panel">
+    <h1>Sagui <span>Midnight Mentor</span> — Microinterações</h1>
+    <p class="sub">4 interações funcionais · clique nos botões para perceber cada animação</p>
 
-  <!-- ============================================================
-       PAINEL DE TESTE (remover em produção)
-       ============================================================ -->
-  <div class="test-panel">
-    <h3>🧪 Teste do Mascote</h3>
-    <p>Mude o estado do personagem ou fale algo com ele:</p>
-    <div class="row">
-      <button onclick="MascotController.changeState('idle')">Idle · meditando</button>
-      <button onclick="MascotController.changeState('typing')">Typing · estudando</button>
-      <button onclick="MascotController.changeState('loading')">Loading · IA</button>
-      <button onclick="MascotController.changeState('success')">Success · pulando</button>
-      <button class="ghost" onclick="MascotController.changeState('error')">Error</button>
-    </div>
-    <div class="row">
-      <button onclick="MascotController.speak('Mandou bem! +30 XP 🎉', 'success')">✅ Falar acerto</button>
-      <button onclick="MascotController.speak('Aguarde, estou analisando sua resposta com a IA…', 'loading')">⏳ Falar loading</button>
-      <button onclick="MascotController.speak('Quase! Leia a explicação e tente de novo 💪', 'error')">💪 Falar incentivo</button>
-      <button class="ghost" onclick="MascotController.hideBubble()">✕ Ocultar balão</button>
+    <!-- 1. MEDITAÇÃO -->
+    <section class="demo-card">
+      <h3>1 · Meditação — respiração</h3>
+      <p>Gatilho: aluno cansado pressiona "Meditar". Sagui respira em loop.</p>
+      <div class="demo-stage" style="min-height:200px;">
+        <div class="breath-ring" style="left:38%;"></div>
+        <div class="breath-ring" style="left:62%; top:44%;"></div>
+        <img id="breath-sagui" src="public/assets/sagui_meditando_2.png" alt="Sagui meditando">
+        <span class="breath-hint" style="right:10px;">INSPIRA</span>
+      </div>
+    </section>
+
+    <!-- 2. TUTORIAL -->
+    <section class="demo-card">
+      <h3>2 · Tutorial — sagui guiando + seta pulsante</h3>
+      <p>A seta pulsa apontando para o elemento que o usuário deve clicar.</p>
+      <div class="demo-stage">
+        <img id="tutor-sagui" src="public/assets/sagui_estudando_2.png" alt="Sagui estudando">
+        <div class="demo-arrow" style="position:absolute; right:24px; bottom:44px;">
+          <svg width="40" height="40" viewBox="0 0 38 38" fill="none">
+            <path d="M19 0v26m0 0l-9-9m9 9l9-9" stroke="#fbbf24" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. MARCO DE LIÇÃO -->
+    <section class="demo-card">
+      <h3>3 · Marco de lição — XP saltando + sagui cai com aprovação</h3>
+      <p>Modo XP (alegria) e modo aprovação (tablet + balão).</p>
+      <div class="row">
+        <button onclick="openMilestone(false)">🎉 Ganhar XP (sagui pulando)</button>
+        <button class="ghost" onclick="openMilestone(true)">✅ Aprovação de etapa (tablet)</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- OVERLAY DO MARCO -->
+  <div id="milestone-overlay" class="overlay">
+    <div class="milestone-panel">
+      <div class="mascot-drop">
+        <img id="milestone-img" src="public/assets/sagui_pulando_2.png" alt="Sagui comemorando">
+        <div id="approach-bubble" class="approach-bubble">Etapa concluída! Acertou em cheio ✅</div>
+      </div>
+      <div id="xp-label" class="xp-shine">+30</div>
+      <p id="milestone-text">Você completou a lição com sucesso!</p>
+      <button onclick="closeMilestone()">Continuar 💪</button>
     </div>
   </div>
 
   <script>
-    /* ============================================================
-       3. JAVASCRIPT — Máquina de estados e API do mascote
-       ============================================================ */
-    const MascotController = (() => {
-      // Mapa de estados -> sprite + classe de animação
-      const STATES = {
-        idle:    { src: '/mascot-meditate.png', className: 'state-idle' },
-        typing:  { src: '/mascot-study.png',     className: 'state-typing' },
-        loading: { src: '/mascot-correct.png',   className: 'state-loading' },
-        success: { src: '/mascot-jump.png',      className: 'state-success' },
-        error:   { src: '/mascot-meditate.png',  className: 'state-error' },
-      };
+    const CONFETTI_COLORS = ['#fbbf24','#f59e0b','#34d399','#818cf8','#f472b6','#60a5fa','#fb923c'];
+    const overlay = document.getElementById('milestone-overlay');
+    const milImg  = document.getElementById('milestone-img');
+    const bubble  = document.getElementById('approach-bubble');
+    const xp      = document.getElementById('xp-label');
 
-      const container = document.getElementById('mascot-container');
-      const img       = document.getElementById('mascot-img');
-      const bubble    = document.getElementById('speech-bubble');
-      const textEl    = document.getElementById('speech-text');
-
-      let currentState = 'idle';
-      let hideTimer = null;
-      let fadeTimer = null;
-
-      /** Troca o estado: atualiza sprite com cross-fade e animação CSS. */
-      function changeState(newState) {
-        const s = STATES[newState] || STATES.idle;
-        if (newState !== currentState) {
-          currentState = newState;
-          container.className = s.className;
-          // cross-fade: esmaece -> troca src -> volta à opacidade total
-          img.style.opacity = '0';
-          clearTimeout(fadeTimer);
-          fadeTimer = setTimeout(() => {
-            img.src = s.src;
-            img.onload = () => { img.style.opacity = '1'; };
-            img.onerror = () => { img.style.opacity = '1'; };
-            // fallback p/ imagens em cache (onload pode não disparar)
-            setTimeout(() => { img.style.opacity = '1'; }, 120);
-          }, 60);
+    function openMilestone(approval) {
+      overlay.classList.remove('open');
+      overlay.querySelectorAll('.confetti-piece').forEach(n=>n.remove());
+      setTimeout(()=>{
+        // sprite
+        milImg.src = approval ? 'public/assets/sagui_aprovacao_2.png' : 'public/assets/sagui_pulando_2.png';
+        bubble.style.display = approval ? 'block' : 'none';
+        bubble.style.position = 'absolute';
+        // XP sempre salta no centro; texto varia
+        xp.textContent = approval ? 'Etapa ✓' : '+30';
+        document.getElementById('milestone-text').textContent =
+          approval ? 'Você acertou em cheio e liberou a próxima etapa!' : 'Você acertou e ganhou 30 XP!';
+        // confete apenas no modo XP
+        if (!approval) {
+          for (let i=0;i<24;i++){
+            const el = document.createElement('span');
+            el.className = 'confetti-piece';
+            el.style.setProperty('--l', (12+Math.random()*76)+'%');
+            el.style.setProperty('--c', CONFETTI_COLORS[i%CONFETTI_COLORS.length]);
+            el.style.setProperty('--x', (Math.cos(Math.random()*6.28)*140)+'px');
+            el.style.setProperty('--y', (30+Math.random()*160)+'px');
+            el.style.setProperty('--r', (Math.random()*2-1)*360+'deg');
+            overlay.appendChild(el);
+          }
         }
-      }
-
-      /** Fala um texto: muda o estado (opcional) e exibe o balão com fade-in. */
-      function speak(text, state) {
-        if (state) changeState(state);
-        textEl.textContent = text || '';
-        bubble.classList.add('visible');
-        clearTimeout(hideTimer);
-        hideTimer = setTimeout(hideBubble, 5000);
-      }
-
-      /** Oculta o balão com fade-out. */
-      function hideBubble() {
-        clearTimeout(hideTimer);
-        bubble.classList.remove('visible');
-      }
-
-      return { changeState, speak, hideBubble, STATES };
-    })();
+        // reinicia animações
+        xp.classList.remove('xp-shine'); void xp.offsetWidth; xp.classList.add('xp-shine');
+        milImg.parentElement.classList.remove('mascot-drop'); void milImg.parentElement.offsetWidth; milImg.parentElement.classList.add('mascot-drop');
+        overlay.classList.add('open');
+      }, 30);
+    }
+    function closeMilestone() { overlay.classList.remove('open'); }
   </script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { TabId } from '../types';
+import { Mascot } from './Mascot';
 
 interface Step {
   id: string;
@@ -129,6 +130,31 @@ export function OnboardingTour() {
         <div className="fixed inset-0 bg-black/70" style={{ pointerEvents: 'auto' }} />
       )}
 
+      {/* Mascote ancorado ao elemento-alvo (Central de Estudos) simulando fala */}
+      {(() => {
+        const mascotSize = 112;
+        const mascotStyle: React.CSSProperties = {};
+        if (hasTarget && targetRect) {
+          // card abaixo -> sagui acima do alvo; card acima -> sagui abaixo do alvo
+          mascotStyle.top = cardPos === 'bottom'
+            ? Math.max(12, targetRect.top - mascotSize - 28)
+            : targetRect.top + targetRect.height + 24;
+          mascotStyle.left = Math.max(8, targetRect.left + targetRect.width / 2 - mascotSize / 2);
+        } else {
+          mascotStyle.top = '50%';
+          mascotStyle.left = 24;
+          mascotStyle.transform = 'translateY(-50%)';
+        }
+        return (
+          <div
+            className="fixed z-[201] hidden md:block"
+            style={{ width: mascotSize, height: mascotSize, ...mascotStyle }}
+          >
+            <Mascot state="typing" talking message="Vou te guiar, um passo de cada vez!" speech variant="floating" size={mascotSize} />
+          </div>
+        );
+      })()}
+
       {/* Card */}
       <div
         ref={cardRef}
@@ -179,6 +205,23 @@ export function OnboardingTour() {
           </div>
         </div>
       </div>
+
+      {/* Seta sequencial apontando para o elemento-alvo guiado */}
+      {hasTarget && (
+        <div
+          className={`mm-arrow ${cardPos === 'bottom' ? 'mm-arrow--down' : 'mm-arrow--up'}`}
+          style={{
+            top: cardPos === 'bottom'
+              ? targetRect.top - 52
+              : targetRect.top + targetRect.height + 16,
+            left: targetRect.left + targetRect.width / 2 - 18,
+          }}
+        >
+          <svg width="38" height="38" viewBox="0 0 38 38" fill="none" aria-hidden="true">
+            <path d="M19 0v26m0 0l-9-9m9 9l9-9" stroke="#fbbf24" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      )}
     </div>
   );
 }

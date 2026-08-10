@@ -742,7 +742,7 @@
   60% { opacity: 0; transform: translateY(-30px) scale(0.4); }
 }
 
-/* ---------- Redução de movimento (acessibilidade) ---------- */
+/* ---------- Redução de movimento (accessibilidade) ---------- */
 @media (prefers-reduced-motion: reduce) {
   .mascot-img, .mascot-bubble, .mascot-confetti, .mascot-shadow,
   .mascot-up-top::before, .mascot-up-top::after, .mascot-dots span {
@@ -753,5 +753,372 @@
     animation: none !important;
     transform: none;
     opacity: 1;
+  }
+}
+
+/* =========================================================
+   MODO MEDITAÇÃO — respiração profunda guiada (sagui)
+   Dispara ao clicar em "Meditar" quando o usuário está cansado.
+   ========================================================= */
+
+/* Halos concêntricos que crescem ao inspirar e contraem ao expirar */
+.mm-breathe-ring {
+  position: absolute;
+  left: 50%;
+  bottom: 6%;
+  width: 60%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid rgba(16, 185, 129, 0.18);
+  transform: translateX(-50%) scale(0.6);
+  opacity: 0;
+  pointer-events: none;
+  animation: mmBreathRing 8s ease-in-out infinite;
+}
+.mm-breathe-ring--2 { animation-delay: 4s; }
+.mm-breathe-ring--3 { animation-delay: 8s; border-color: rgba(245, 158, 11, 0.14); }
+@keyframes mmBreathRing {
+  0%, 100% { opacity: 0; transform: translateX(-50%) scale(0.55); }
+  25% { opacity: 0.9; transform: translateX(-50%) scale(1.35); }
+  50% { opacity: 0; transform: translateX(-50%) scale(1.5); }
+}
+
+/* Personagem lateral respirando: escala cintilante + leve glow ao inspirar */
+/* "breathe": inspira scale(1.05) e expira scale(1.0) — loop infinito alternado */
+@keyframes breathe {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+.mascot-anim-breathing .mascot-img {
+  animation: mascotBreath 8s ease-in-out infinite, breathe 4s ease-in-out infinite alternate;
+}
+.mascot-anim-breathing::before {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.22), transparent 72%);
+  z-index: 0;
+  animation: mmBreathGlow 8s ease-in-out infinite;
+}
+@keyframes mascotBreath {
+  0%, 100% { transform: translateY(0) scale(1); }
+  25% { transform: translateY(-4px) scale(1.08) scaleY(1.1); }
+  50% { transform: translateY(-6px) scale(0.94) scaleY(0.9); }
+  75% { transform: translateY(-3px) scale(1.02); }
+}
+@keyframes mmBreathGlow {
+  0%, 100% { opacity: 0.25; transform: scale(0.9); }
+  25% { opacity: 1; transform: scale(1.12); }
+  50% { opacity: 0.2; transform: scale(0.92); }
+}
+
+/* Guia de fase (INSPIRA / SEGURA / EXPIRA) */
+.mm-breath-phase {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.mm-breath-phase--active {
+  opacity: 1;
+  transform: scale(1.06);
+}
+.mm-breath-phase:not(.mm-breath-phase--active) {
+  opacity: 0.35;
+  transform: scale(0.96);
+}
+
+/* =========================================================
+    TUTORIAL — personagem falando + setas sequenciais
+   ========================================================= */
+
+/* Personagem simulando fala: encurta/alonga verticalmente (boca que "abre") */
+.mascot-anim-talk .mascot-img {
+  animation: mascotTalk 0.7s ease-in-out infinite;
+  transform-origin: 50% 70%;
+}
+@keyframes mascotTalk {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  30% { transform: translateY(1px) scaleY(0.96) scaleX(1.02); }
+  55% { transform: translateY(-1px) scaleY(1.03); }
+}
+
+/* Barras de áudio equalizando sob o balão para reforçar a fala */
+.mm-talk-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 12px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.mm-talk-bars span {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: #10b981;
+  transform-origin: bottom;
+  animation: mmTalkBar 0.55s ease-in-out infinite;
+}
+.mm-talk-bars span:nth-child(1) { animation-delay: 0s; }
+.mm-talk-bars span:nth-child(2) { animation-delay: 0.12s; }
+.mm-talk-bars span:nth-child(3) { animation-delay: 0.24s; }
+.mm-talk-bars span:nth-child(4) { animation-delay: 0.36s; }
+@keyframes mmTalkBar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+/* Setas guia apontando para elementos (Duolingo) */
+.mm-arrow {
+  position: absolute;
+  z-index: 202;
+  pointer-events: none;
+  animation: mmArrowBounce 1.3s ease-in-out infinite;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+}
+.mm-arrow--down { transform: rotate(0deg); }
+.mm-arrow--right { transform: rotate(-90deg); }
+.mm-arrow--left { transform: rotate(90deg); }
+.mm-arrow--up { transform: rotate(180deg); }
+@keyframes mmArrowBounce {
+  0%, 100% { translate: 0 0; opacity: 0.6; }
+  30% { opacity: 1; }
+  60% { translate: 0 10px; }
+}
+.mm-arrow--right { animation-name: mmArrowBounceRight; }
+@keyframes mmArrowBounceRight {
+  0%, 100% { translate: 0 0; opacity: 0.6; }
+  30% { opacity: 1; }
+  60% { translate: 10px 0; }
+}
+.mm-arrow--left { animation-name: mmArrowBounceLeft; }
+@keyframes mmArrowBounceLeft {
+  0%, 100% { translate: 0 0; opacity: 0.6; }
+  30% { opacity: 1; }
+  60% { translate: -10px 0; }
+}
+.mm-arrow--up { animation-name: mmArrowBounceUp; }
+@keyframes mmArrowBounceUp {
+  0%, 100% { translate: 0 0; opacity: 0.6; }
+  30% { opacity: 1; }
+  60% { translate: 0 -10px; }
+}
+
+/* =========================================================
+    MARCO DA LIÇÃO — XP salta no centro + sagui cai com joinha
+   ========================================================= */
+
+/* XP "pop up" central */
+.mm-xp-pop {
+  animation: mmXpPop 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes mmXpPop {
+  0% { opacity: 0; transform: scale(0.2) translateY(30px); }
+  35% { opacity: 1; transform: scale(1.25) translateY(-12px); }
+  55% { transform: scale(0.92) translateY(2px); }
+  75% { transform: scale(1.1) translateY(-4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Halo pulsante atrás do XP */
+.mm-milestone-glow {
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.4), transparent 70%);
+  animation: mmGlowPulse 1.4s ease-in-out infinite;
+}
+@keyframes mmGlowPulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Sagui cai do topo e se equilibra com um bounce de chegada */
+.mm-mascot-drop {
+  animation: mmMascotDrop 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes mmMascotDrop {
+  0% { transform: translateY(-260px) rotate(-4deg); opacity: 0; }
+  45% { transform: translateY(0) rotate(2deg); opacity: 1; }
+  60% { transform: translateY(-22px) rotate(0deg); }
+  78% { transform: translateY(0) rotate(0deg); }
+  88% { transform: translateY(-8px) rotate(0deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+
+/* Sachê/recompensa derrubado ao lado do sagui */
+.mm-milestone-confetti {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  animation: mmMilestoneConfetti 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes mmMilestoneConfetti {
+  0% { opacity: 1; transform: translate(0, -40px) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(var(--mx, 0px), var(--my, 60px)) rotate(var(--rot, 320deg)) scale(0.5); }
+}
+
+/* Topo (overlay) com ligeiro "pop" do container de Toconteúdo */
+.mm-milestone-panel {
+  animation: mmPanelIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes mmPanelIn {
+  0% { opacity: 0; transform: scale(0.85) translateY(24px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* =========================================================
+   LEVEL UP — overlay de tela cheia em destaque
+   Dispara ao subir de nível (Duolingo-style celebration).
+   ========================================================= */
+.levelup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+.levelup-inner {
+  position: relative;
+  width: min(92vw, 420px);
+  padding: 44px 28px 30px;
+  border-radius: 28px;
+  text-align: center;
+  background: rgba(17, 24, 39, 0.96);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.7), 0 0 60px rgba(245, 158, 11, 0.15);
+  animation: levelupPanel 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes levelupPanel {
+  0% { opacity: 0; transform: scale(0.8) translateY(30px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.levelup-badge {
+  display: inline-block;
+  padding: 5px 16px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.levelup-mascot {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  margin: 6px auto 4px;
+}
+.levelup-mascot img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 28px rgba(0, 0, 0, 0.5));
+  animation: levelupJump 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes levelupJump {
+  0%   { transform: translateY(-420px) rotate(-6deg) scale(0.8); opacity: 0; }
+  45%  { transform: translateY(0) rotate(3deg) scale(1.05); opacity: 1; }
+  60%  { transform: translateY(-34px) rotate(0) scale(0.97); }
+  78%  { transform: translateY(0) scale(1); }
+  88%  { transform: translateY(-12px) scale(1); }
+  100% { transform: translateY(0) scale(1); }
+}
+.levelup-glow {
+  position: absolute;
+  inset: -14%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.5), transparent 70%);
+  animation: levelupGlow 1.3s ease-in-out infinite;
+}
+@keyframes levelupGlow {
+  0%, 100% { opacity: 0.5; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+.levelup-title {
+  font-size: 28px;
+  font-weight: 900;
+  color: #fff;
+  margin-top: 14px;
+  animation: levelupText 0.6s 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes levelupText {
+  0% { opacity: 0; transform: scale(0.6); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.levelup-sub {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-top: 6px;
+}
+.levelup-btn { margin-top: 22px; }
+.levelup-confetti {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  animation: levelupConfetti 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes levelupConfetti {
+  0% { opacity: 1; transform: translate(0, -50px) rotate(0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--mx, 0px), var(--my, 80px)) rotate(var(--rot, 360deg)) scale(0.5); }
+}
+
+/* =========================================================
+   ASSISTENTE (Sagui) — botão + chat embutido
+   ========================================================= */
+.mascot-assist-idle {
+  animation: assistFloat 3.4s ease-in-out infinite;
+}
+@keyframes assistFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.assistant-chat {
+  animation: assistChatIn 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transform-origin: top center;
+}
+@keyframes assistChatIn {
+  0% { opacity: 0; transform: scaleY(0.6) translateY(-8px); }
+  100% { opacity: 1; transform: scaleY(1) translateY(0); }
+}
+
+/* Balão de aprovação (sagui no tablet) */
+.mm-approval-bubble {
+  position: absolute;
+  max-width: 190px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(252, 211, 77, 0.35);
+  backdrop-filter: blur(8px);
+  color: #fef3c7;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  transform-origin: bottom left;
+  animation: mmApprovalBubble 0.9s 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes mmApprovalBubble {
+  0% { opacity: 0; transform: scale(0.2); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-anim-breathing, .mascot-anim-breathing::before,
+  .mm-breathe-ring, .mascot-anim-talk, .mm-talk-bars span,
+  .mm-arrow, .mm-xp-pop, .mm-mascot-drop, .mm-milestone-confetti,
+  .mm-milestone-glow, .mm-milestone-panel, .mascot-anim-breathing .mascot-img,
+  .mm-approval-bubble,
+  .levelup-inner, .levelup-mascot img, .levelup-glow, .levelup-title, .levelup-confetti,
+  .mascot-assist-idle, .assistant-chat {
+    animation: none !important;
   }
 }

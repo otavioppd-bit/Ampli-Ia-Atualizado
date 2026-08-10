@@ -1,18 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { IconClock } from '../../shared/ui/Icons';
+import { MeditationOverlay } from '../../shared/ui/MeditationOverlay';
 
 type FocoState = 'idle' | 'foco' | 'pausa' | 'concluido';
 const FOCO_MIN = 25;
 const PAUSA_MIN = 5;
 
 export function FocoPage() {
-  const { addXP, addLog, isMuted, setToast } = useAppStore();
+  const { addXP, addLog, isMuted, setToast, cansaco } = useAppStore();
   const [state, setState] = useState<FocoState>('idle');
   const [segundos, setSegundos] = useState(FOCO_MIN * 60);
   const [cicles, setCicles] = useState(0);
   const [historico, setHistorico] = useState<{ tipo: string; data: number; duracao: number }[]>([]);
   const [sessoesHoje, setSessoesHoje] = useState(0);
+  const [meditando, setMeditando] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mutedRef = useRef(isMuted);
   mutedRef.current = isMuted;
@@ -118,10 +120,19 @@ export function FocoPage() {
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/15 to-emerald-600/10 flex items-center justify-center">
           <IconClock size={20} className="text-emerald-400" />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl md:text-2xl font-bold text-white">Foco Total</h1>
           <p className="text-sm text-gray-500 mt-0.5">Timer Pomodoro para estudos</p>
         </div>
+        {cansaco >= 4 && (
+          <button
+            onClick={() => setMeditando(true)}
+            className="btn-secondary !px-4 !py-2.5 text-sm border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/10"
+            title="Você parece cansado — respire um pouco antes de continuar"
+          >
+            🧘 Meditar
+          </button>
+        )}
       </div>
 
       {/* Timer card */}
@@ -235,6 +246,19 @@ export function FocoPage() {
       <div className="text-center text-xs text-gray-600 leading-relaxed px-4 py-3 glass-light rounded-xl">
         🧠 O ciclo Pomodoro ajuda a manter o foco e prevenir o cansaço mental. Complete ciclos para ganhar XP extra!
       </div>
+
+      {/* Meditação (respiro) */}
+      <MeditationOverlay
+        open={meditando}
+        onClose={() => setMeditando(false)}
+        onComplete={(seconds) => {
+          setMeditando(false);
+          const xp = Math.max(5, Math.round(seconds / 20));
+          addXP(xp);
+          addLog({ timestamp: Date.now(), type: 'foco', description: `Meditação guiada (${Math.round(seconds)}s)`, xp });
+          setToast(`+${xp} XP — mente renovada! 🧘`, 'success');
+        }}
+      />
     </div>
   );
 }

@@ -14,10 +14,10 @@ export type MascotState = 'idle' | 'typing' | 'loading' | 'success' | 'error';
 
 /** Sprite renderizado por estado. */
 export const MASCOT_SPRITE: Record<MascotState, string> = {
-  idle: '/mascot-meditate.png',
-  typing: '/mascot-study.png',
-  loading: '/mascot-correct.png',
-  success: '/mascot-jump.png',
+  idle: '/assets/sagui_meditando_2.png',
+  typing: '/assets/sagui_estudando_2.png',
+  loading: '/assets/sagui_aprovacao_2.png',
+  success: '/assets/sagui_pulando_2.png',
   error: '/mascot.png',
 };
 

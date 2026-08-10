@@ -8,11 +8,14 @@ import { QuizPage } from '../features/quiz/QuizPage';
 import { ProfilePage } from '../features/profile/ProfilePage';
 import { RankingPage } from '../features/ranking/RankingPage';
 import { FocoPage } from '../features/foco/FocoPage';
+import { FocusCompanion } from '../features/foco/FocusCompanion';
+import { StudentStore } from '../features/store/StudentStore';
 import { ComunidadePage } from '../features/comunidade/ComunidadePage';
 import { CrisisOverlay } from '../features/overlays/CrisisOverlay';
 import { WeeklyReportModal } from '../features/overlays/WeeklyReportModal';
 import { NotebookStudioModal } from '../features/overlays/NotebookStudioModal';
-import { IconHome, IconBrain, IconEdit, IconNotebook, IconTarget, IconUser, IconTrophy, IconClock, IconMoon, IconLogOut, IconUsersGroup } from '../shared/ui/Icons';
+import { IconHome, IconBrain, IconEdit, IconNotebook, IconTarget, IconUser, IconTrophy, IconClock, IconMoon, IconLogOut, IconUsersGroup, IconStore } from '../shared/ui/Icons';
+import { AssistantWidget } from '../shared/ui/AssistantWidget';
 import { calcLevel } from '../shared/lib/utils';
 
 const TABS: { id: TabId; label: string; icon: typeof IconHome }[] = [
@@ -21,6 +24,7 @@ const TABS: { id: TabId; label: string; icon: typeof IconHome }[] = [
   { id: 'essay', label: 'Redação', icon: IconEdit },
   { id: 'foco', label: 'Foco', icon: IconClock },
   { id: 'quiz', label: 'Quiz', icon: IconTarget },
+  { id: 'store', label: 'Loja', icon: IconStore },
   { id: 'ranking', label: 'Ranking', icon: IconTrophy },
   { id: 'comunidade', label: 'Ligas', icon: IconUsersGroup },
   { id: 'notebook', label: 'Caderno', icon: IconNotebook },
@@ -42,6 +46,7 @@ export function AppShell() {
       case 'profile': return <ProfilePage key="profile" />;
       case 'ranking': return <RankingPage key="ranking" />;
       case 'foco': return <FocoPage key="foco" />;
+      case 'store': return <StudentStore key="store" />;
       case 'comunidade': return <ComunidadePage key="comunidade" />;
     }
   }
@@ -62,6 +67,11 @@ export function AppShell() {
               </h1>
               <p className="text-[10px] text-gray-500 tracking-wide uppercase">Mentor ENEM</p>
             </div>
+          </div>
+
+          {/* Assistente (Sagui) — entre o logo "Mentor ENEM" e a Central */}
+          <div className="px-1 pb-1 border-b border-white/[0.03] mb-2">
+            <AssistantWidget />
           </div>
 
           {/* Nav */}
@@ -167,6 +177,7 @@ export function AppShell() {
       <CrisisOverlay />
       <WeeklyReportModal />
       <NotebookStudioModal />
+      <FocusCompanion />
     </div>
   );
 }

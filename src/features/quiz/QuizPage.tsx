@@ -4,6 +4,7 @@ import { QuizQuestion, QuizResult } from '../../shared/types';
 import { generateQuizQuestions, aiAvailable } from '../../shared/lib/aiService';
 import { playCorrect, playError, playLevelUp } from '../../shared/lib/sfx';
 import { mascotStore } from '../../stores/mascotStore';
+import { XpMilestone } from '../../shared/ui/XpMilestone';
 
 type Stage = 'select' | 'topics' | 'playing' | 'result';
 
@@ -79,6 +80,7 @@ export function QuizPage() {
   const [acertos, setAcertos] = useState(0);
   const [result, setResult] = useState<QuizResult | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [showMilestone, setShowMilestone] = useState(false);
 
   const flashcardQuiz = (window as any).__flashcardQuiz as QuizQuestion[] | undefined;
   if (flashcardQuiz && stage === 'select') {
@@ -155,6 +157,7 @@ export function QuizPage() {
     if (!isMuted && xpGanho > 0) playLevelUp();
     mascotStore.getState().setState('success', `🎉 Quiz concluído! +${xpGanho} XP de bônus — meta cumprida!`);
     setStage('result');
+    if (xpGanho > 0) setShowMilestone(true);
   }
 
   if (stage === 'select') {
@@ -290,6 +293,7 @@ export function QuizPage() {
     const pct = Math.round((result.acertos / result.total) * 100);
     const grade = pct >= 80 ? 'Excelente!' : pct >= 60 ? 'Mandou bem!' : pct >= 30 ? 'Bom, mas pode melhorar!' : 'Continue praticando!';
     return (
+      <>
       <div className="space-y-5 animate-scale-in max-w-md mx-auto">
         <div className="glass rounded-2xl p-8 text-center">
           <div className="relative w-36 h-36 mx-auto mb-5">
@@ -321,6 +325,16 @@ export function QuizPage() {
           </div>
         </div>
       </div>
+
+      {/* Marco da lição: XP salta no centro + sagui cai com joinha */}
+      <XpMilestone
+        open={showMilestone}
+        xp={result.xpGanho}
+        acertos={result.acertos}
+        total={result.total}
+        onClose={() => setShowMilestone(false)}
+      />
+      </>
     );
   }
 

@@ -1,4 +1,5 @@
 import { ChatPersona } from '../types';
+import { StudentMonthlyRecord } from './dropoutRisk';
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 const MAX_RETRIES = 3;
@@ -263,6 +264,188 @@ ${text}`;
 }
 
 export const QUIZ_TOPICS_CACHE_KEY = 'mm_quiz_topics_cache';
+
+/* ============================================================
+   MENTOR CHAT — Sagui (personalidade padrão do assistente)
+   ============================================================ */
+
+const SAGUI_SYSTEM_PROMPT =
+  'Você é o Sagui, um mentor educacional empático do projeto The Midnight Mentor. Seu objetivo é ajudar estudantes do ensino médio noturno do Brasil. Seja breve, motivador e use linguagem acessível. Responda em parágrafos curtos.';
+
+export interface GeminiHistoryMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
+export interface SendMessageToGeminiOptions {
+  apiKey: string;
+  persona?: ChatPersona | null;
+  history?: GeminiHistoryMessage[];
+  imageBase64?: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Envia a mensagem do aluno para o Gemini com a personalidade do Sagui.
+ * Suporta histórico recente (últimas 8 mensagens), persona ativa e imagens.
+ * Lança erro amigável em pt-BR em caso de falha (o ChatPage trata o catch).
+ */
+export async function sendMessageToGemini(
+  userMessage: string,
+  { apiKey, persona = null, history = [], imageBase64, signal }: SendMessageToGeminiOptions,
+): Promise<string> {
+  const systemInstruction = persona
+    ? `${SAGUI_SYSTEM_PROMPT} Sua especialidade atual: ${persona.name}. ${persona.instruction} Mantenha o tom acolhedor e direto do Sagui.`
+    : SAGUI_SYSTEM_PROMPT;
+
+  const contents: { role: 'user' | 'model'; parts: any[] }[] = [];
+  for (const msg of history.slice(-8)) {
+    const text = (msg.text || '').trim();
+    if (!text) continue;
+    contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text }] });
+  }
+
+  const parts: any[] = [{ text: userMessage || 'Olá!' }];
+  if (imageBase64) {
+    const mimeMatch = imageBase64.match(/^data:(image\/\w+);base64,/);
+    if (mimeMatch) {
+      const mimeType = mimeMatch[1];
+      const data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      parts.push({ inlineData: { mimeType, data } });
+    }
+  }
+  contents.push({ role: 'user', parts });
+
+  const res = await sendToAI({
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    contents,
+    generationConfig: { temperature: 0.7, maxOutputTokens: 1024, topP: 0.9, topK: 32 },
+  }, apiKey, signal);
+
+  if (!res.ok) {
+    if (hasProxy()) throw new Error(`Erro na IA: ${res.error || 'falha do servidor'}`);
+    if (res.status === 403 || res.status === 400) {
+      throw new Error('API key inválida ou sem permissão. Verifique sua chave do Google AI Studio.');
+    }
+    if (res.status === 429) {
+      throw new Error('Limite de requisições excedido. Aguarde um momento e tente novamente.');
+    }
+    throw new Error(`Erro na API: ${res.error}`);
+  }
+
+  const text = extractGeminiText(res.data);
+  return text || 'Desculpe, não consegui gerar uma resposta agora. Tente me perguntar de novo! 🐒';
+}
+
+/* ============================================================
+   DASHBOARD PREDITIVO — análise de evasão com IA
+   ============================================================ */
+
+export type EvasionRisk = 'Baixo' | 'Médio' | 'Alto';
+export type RiskCode = 'green' | 'yellow' | 'red';
+
+export interface StudentRiskAnalysis {
+  risk: EvasionRisk;
+  riskCode: RiskCode;
+  recommendation: string;
+  raw: string;
+}
+
+/** Normaliza o texto do modelo para um dos valores válidos de risco. */
+export function normalizeRisk(value: unknown): EvasionRisk {
+  const text = String(value || '').toLowerCase();
+  if (text.includes('alto')) return 'Alto';
+  if (text.includes('baixo')) return 'Baixo';
+  if (text.includes('med')) return 'Médio';
+  return 'Médio';
+}
+
+/**
+ * Converte a resposta do Gemini (JSON ou texto livre) em uma análise estruturada.
+ * Função pura — não faz I/O, ideal para testes.
+ */
+export function parseRiskAnalysis(raw: string): { risk: EvasionRisk; riskCode: RiskCode; recommendation: string } {
+  const text = (raw || '').trim();
+
+  let obj: any = null;
+  try {
+    const json = extractJson(text);
+    if (json) obj = JSON.parse(json);
+  } catch { /* texto livre */ }
+
+  const risk = normalizeRisk(obj?.riscoEvasao ?? extractRiskFromText(text));
+  const riskCode: RiskCode = risk === 'Baixo' ? 'green' : risk === 'Alto' ? 'red' : 'yellow';
+
+  let recommendation = typeof obj?.recomendacao === 'string'
+    ? obj.recomendacao.trim()
+    : '';
+
+  if (!recommendation) {
+    // Fallback: tenta extrair frases completas do texto livre
+    const sentences = text.match(/[^.!?]+[.!?]+/g);
+    recommendation = sentences
+      ? sentences.map(s => s.trim()).join(' ')
+      : text.slice(0, 240);
+  }
+
+  return { risk, riskCode, recommendation };
+}
+
+function extractRiskFromText(text: string): EvasionRisk {
+  const match = text.match(/\b(Baixo|Médio|Medio|Alto)\b/i);
+  return match ? normalizeRisk(match[1]) : 'Médio';
+}
+
+/**
+ * Envia o histórico do aluno (notas + horas de uso) para o Gemini e
+ * retorna a previsão de risco de evasão para os próximos 4 meses.
+ */
+export async function analyzeStudentData(
+  historicalData: StudentMonthlyRecord[],
+  { apiKey, signal }: { apiKey: string; signal?: AbortSignal },
+): Promise<StudentRiskAnalysis> {
+  const payload = historicalData.map((d, i) => ({
+    mes: d.month,
+    sequencial: i + 1,
+    notaMedia: d.notaMedia,
+    horasDeUso: d.tempoUso,
+  }));
+
+  const prompt = [
+    'Analise os dados recentes de frequência e notas deste aluno do ensino médio noturno. Com base nesses dados, gere uma previsão de risco de evasão (Baixo, Médio, Alto) para os próximos 4 meses e escreva uma recomendação de apenas 2 frases para os pais.',
+    '',
+    'Responda APENAS com um objeto JSON válido, sem markdown e sem comentários, no formato:',
+    '{ "riscoEvasao": "Baixo" | "Médio" | "Alto", "recomendacao": "<recomendação de 2 frases para os pais>" }',
+    '',
+    `Dados do aluno (últimos ${payload.length} meses):`,
+    JSON.stringify(payload, null, 2),
+  ].join('\n');
+
+  const res = await sendToAI({
+    systemInstruction: {
+      parts: [{
+        text: 'Você é um cientista de dados educacional especializado em evasão escolar do ensino médio noturno brasileiro. Responda apenas com o JSON solicitado.',
+      }],
+    },
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 512, topP: 0.9, topK: 20 },
+  }, apiKey, signal);
+
+  if (!res.ok) {
+    if (hasProxy()) throw new Error(`Erro na IA: ${res.error || 'falha do servidor'}`);
+    if (res.status === 403 || res.status === 400) {
+      throw new Error('API key inválida ou sem permissão. Verifique sua chave do Google AI Studio.');
+    }
+    if (res.status === 429) {
+      throw new Error('Limite de requisições excedido. Aguarde um momento e tente novamente.');
+    }
+    throw new Error(`Erro na API: ${res.error}`);
+  }
+
+  const raw = extractGeminiText(res.data) || '';
+  const parsed = parseRiskAnalysis(raw);
+  return { ...parsed, raw };
+}
 
 /**
  * Testa a conexão de ponta a ponta (proxy OU chave direta).

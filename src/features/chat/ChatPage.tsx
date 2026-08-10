@@ -4,9 +4,10 @@ import { searchKB, matchSubject, extractKeywords, SPECIAL_RESPONSES, buildKBFrom
 import { getEmpathicPrefix } from '../../shared/lib/emotionEngine';
 import { QUIZ_BANK } from '../../shared/lib/quizBank';
 import { ENEM_KB } from '../../shared/lib/kbEnem';
-import { askGemini, aiAvailable } from '../../shared/lib/aiService';
+import { sendMessageToGemini, aiAvailable } from '../../shared/lib/aiService';
 import { ChatMessage, Nota, ChatPersona } from '../../shared/types';
 import { playClick, speak, stopSpeech } from '../../shared/lib/sfx';
+import { LAST_SUBJECT, buildContextGreeting } from '../../shared/lib/contextMemory';
 import { PersonaManager } from '../../shared/ui/PersonaManager';
 import { IconSend, IconMic, IconCamera, IconVolume, IconVolumeOff, IconUsers, IconSparkles, IconBrain } from '../../shared/ui/Icons';
 
@@ -107,7 +108,19 @@ export function ChatPage() {
   useEffect(() => {
     if (chatMessages.length === 0) {
       const saved = localStorage.getItem('mm_chat_messages');
-      if (saved) { try { useAppStore.getState().setChatMessages(JSON.parse(saved)); } catch { } }
+      if (saved) {
+        try { useAppStore.getState().setChatMessages(JSON.parse(saved)); } catch { }
+        return;
+      }
+      // Memória de contexto: abre o chat retomando a última matéria estudada
+      const greeting: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        text: buildContextGreeting(LAST_SUBJECT),
+        timestamp: Date.now(),
+      };
+      addChatMessage(greeting);
+      persistMessages([greeting]);
     }
   }, []);
 
@@ -132,7 +145,14 @@ export function ChatPage() {
       setIsGenerating(true);
       try {
         abortRef.current = new AbortController();
-        const reply = await askGemini(text || (image ? 'Analise esta imagem de estudo' : ''), activePersona, apiKey, image, abortRef.current.signal);
+        const history = chatMessages.map(m => ({
+          role: (m.role === 'user' ? 'user' : 'model') as 'user' | 'model',
+          text: m.text || (m.image ? '[Anexo de imagem]' : ''),
+        }));
+        const reply = await sendMessageToGemini(
+          text || (image ? 'Analise esta imagem de estudo' : 'Olá!'),
+          { apiKey, persona: activePersona, history, imageBase64: image, signal: abortRef.current.signal },
+        );
         const botMsg: ChatMessage = { id: generateId(), role: 'assistant', text: reply, timestamp: Date.now(), mood };
         addChatMessage(botMsg);
         persistMessages([...newMsgs, botMsg]);
@@ -232,7 +252,11 @@ export function ChatPage() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-500">{getSubjectName(activePersona)}</p>
+            <p className="text-xs text-gray-500">
+              {getSubjectName(activePersona)}
+              <span className="text-gray-600"> · </span>
+              <span className="text-violet-400/90">🧠 retomando: {LAST_SUBJECT}</span>
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -352,9 +376,15 @@ export function ChatPage() {
         ))}
         {isGenerating && (
           <div className="flex justify-start animate-slide-up">
-            <div className="glass border-l-4 border-l-amber-500/50 rounded-2xl px-5 py-4">
+            <div className="glass border-l-4 border-l-amber-500/50 rounded-2xl px-4 py-3 flex items-center gap-2.5">
+              <img
+                src="/assets/sagui_estudando_2.png"
+                alt="Sagui digitando"
+                draggable={false}
+                className="w-8 h-8 rounded-full object-cover border border-white/10 mascot-assist-idle shrink-0"
+              />
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-400">Pensando</span>
+                <span className="text-sm text-gray-400">Sagui está digitando</span>
                 <span className="flex gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '0ms' }} />
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '150ms' }} />

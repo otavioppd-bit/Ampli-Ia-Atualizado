@@ -253,7 +253,7 @@ export interface CommunityChatFilter {
 }
 
 // ===== Tab Navigation =====
-export type TabId = 'dashboard' | 'chat' | 'essay' | 'notebook' | 'quiz' | 'profile' | 'ranking' | 'foco' | 'comunidade';
+export type TabId = 'dashboard' | 'chat' | 'essay' | 'notebook' | 'quiz' | 'profile' | 'ranking' | 'foco' | 'comunidade' | 'store';
 
 export interface Tab {
   id: TabId;
