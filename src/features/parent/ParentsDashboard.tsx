@@ -13,6 +13,8 @@ import {
 } from 'chart.js';
 import type { ChartData, ChartOptions } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import { BarChart3, Brain, PartyPopper, TriangleAlert } from 'lucide-react';
+import { AppIcon } from '../../shared/ui/AppIcon';
 
 import { calculateDropoutRisk } from '../../shared/lib/dropoutRisk';
 import type { DropoutProjection } from '../../shared/lib/dropoutRisk';
@@ -94,10 +96,9 @@ function ProjectionAlert({ projection }: { projection: DropoutProjection }) {
   if (projection.trend === 'rising') {
     return (
       <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 to-transparent p-5 animate-fade-up" role="status">
-        <p className="flex items-center gap-2 text-emerald-400 font-bold text-sm">🎉 Tendência de alta confirmada</p>
-        <p className="text-sm text-emerald-200/80 mt-2 leading-relaxed">
-          Excelência! A projeção matemática aponta <b>evolução contínua</b> nas próximos 4 meses.
-          O estudante está em uma trajetória de alta — mantenha o incentivo e o acompanhamento diário.
+        <p className="flex items-center gap-2 text-emerald-400 font-bold text-sm"><PartyPopper size={16} className="inline-block align-[-0.15em] text-amber-400" /> Tendência de alta confirmada</p>
+        <p className="text-sm text-emerald-200/80 mt-2 leading-relaxed"> Excelência! A projeção matemática aponta <b>evolução contínua</b> nas próximos 4 meses.
+          O estudante está em uma trajetória de alta - mantenha o incentivo e o acompanhamento diário.
         </p>
       </div>
     );
@@ -109,9 +110,8 @@ function ProjectionAlert({ projection }: { projection: DropoutProjection }) {
       : 0;
     return (
       <div className="rounded-2xl border border-red-500/25 bg-gradient-to-br from-red-500/10 to-transparent p-5 animate-fade-up" role="alert">
-        <p className="flex items-center gap-2 text-red-400 font-bold text-sm">⚠️ Tendência de queda detectada — intervenção recomendada</p>
-        <p className="text-sm text-red-200/80 mt-2 leading-relaxed">
-          A projeção dos próximos 4 meses indica declínio no desempenho (queda estimada de até <b>{dropPct}%</b>).
+        <p className="flex items-center gap-2 text-red-400 font-bold text-sm"><TriangleAlert size={16} className="inline-block align-[-0.15em] text-amber-400" /> Tendência de queda detectada - intervenção recomendada</p>
+        <p className="text-sm text-red-200/80 mt-2 leading-relaxed"> A projeção dos próximos 4 meses indica declínio no desempenho (queda estimada de até <b>{dropPct}%</b>).
           Recomenda-se: conversar com o estudante, alinhar com a escola, incentivar a rotina de estudos no app e
           monitorar presença no ensino noturno.
         </p>
@@ -139,9 +139,8 @@ function ProjectionAlert({ projection }: { projection: DropoutProjection }) {
 
   return (
     <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-transparent p-5 animate-fade-up" role="status">
-      <p className="flex items-center gap-2 text-amber-400 font-bold text-sm">📊 Tendência estável</p>
-      <p className="text-sm text-amber-200/80 mt-2 leading-relaxed">
-        A projeção não aponta variação significativa. Mantenha o acompanhamento próximo para identificar mudanças cedo.
+      <p className="flex items-center gap-2 text-amber-400 font-bold text-sm"><BarChart3 size={16} className="inline-block align-[-0.15em] text-cyan-400" /> Tendência estável</p>
+      <p className="text-sm text-amber-200/80 mt-2 leading-relaxed"> A projeção não aponta variação significativa. Mantenha o acompanhamento próximo para identificar mudanças cedo.
       </p>
     </div>
   );
@@ -182,21 +181,21 @@ const RISK_META = {
 
 const AI_RISK = {
   Baixo: {
-    emoji: '🟢',
+    icon: 'brilho',
     chip: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25',
     text: 'text-emerald-400',
     border: 'border-emerald-500/25',
     bg: 'bg-gradient-to-br from-emerald-500/10 to-transparent',
   },
   Médio: {
-    emoji: '🟡',
+    icon: 'brilho',
     chip: 'bg-amber-500/10 text-amber-400 border-amber-500/25',
     text: 'text-amber-400',
     border: 'border-amber-500/25',
     bg: 'bg-gradient-to-br from-amber-500/10 to-transparent',
   },
   Alto: {
-    emoji: '🔴',
+    icon: 'brilho',
     chip: 'bg-red-500/10 text-red-400 border-red-500/25',
     text: 'text-red-400',
     border: 'border-red-500/25',
@@ -213,7 +212,7 @@ export function ParentsDashboard() {
   const totalFocus = records.reduce((acc, r) => acc + r.tempoUso, 0);
   const risk = RISK_META[projection.riskLevel];
 
-  // ── Análise preditiva com IA ──
+  // Analise preditiva de evasao (regressao linear)
   const [aiState, setAiState] = useState<{
     status: 'idle' | 'loading' | 'ready' | 'error';
     result?: StudentRiskAnalysis;
@@ -301,8 +300,7 @@ export function ParentsDashboard() {
             </span>
           </h1>
           <p className="text-xs text-gray-500 mt-1">
-            {STUDENT_TURMA}<span className="text-gray-600"> · </span>
-            Responsável: <span className="text-gray-400">{session?.nome || '—'}</span>
+            {STUDENT_TURMA}<span className="text-gray-600"> · </span> Responsável: <span className="text-gray-400">{session?.nome || '-'}</span>
           </p>
         </div>
 
@@ -442,11 +440,11 @@ export function ParentsDashboard() {
 
           {aiState.status === 'loading' ? (
             <span className="px-3 py-1.5 rounded-full text-[11px] font-bold border bg-violet-500/10 text-violet-300 border-violet-500/25 self-start sm:self-auto animate-pulse whitespace-nowrap">
-              🧠 Analisando com IA...
+              <Brain size={12} className="inline mr-1 -mt-0.5" /> Calculando projeção...
             </span>
           ) : aiState.status === 'ready' && aiState.result ? (
             <span className={`px-3 py-1.5 rounded-full text-[11px] font-bold border ${AI_RISK[aiState.result.risk].chip} self-start sm:self-auto whitespace-nowrap`}>
-              {AI_RISK[aiState.result.risk].emoji} Risco: {aiState.result.risk}
+              <AppIcon name={AI_RISK[aiState.result.risk].icon} size={12} className="inline mr-1 -mt-0.5" /> Risco: {aiState.result.risk}
             </span>
           ) : (
             <span className={`px-3 py-1.5 rounded-full text-[11px] font-bold border self-start sm:self-auto whitespace-nowrap ${
@@ -456,7 +454,7 @@ export function ParentsDashboard() {
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
                   : 'bg-amber-500/10 text-amber-400 border-amber-500/25'
             }`}>
-              {projection.trend === 'falling' ? '📉 Tendência de queda' : projection.trend === 'rising' ? '📈 Tendência de alta' : '➖ Estável'}
+              {projection.trend === 'falling' ? ' Tendência de queda' : projection.trend === 'rising' ? ' Tendência de alta' : ' Estável'}
             </span>
           )}
         </div>
@@ -464,7 +462,7 @@ export function ParentsDashboard() {
         {aiState.status === 'loading' ? (
           /* Estado de carregamento: Sagui analisando os dados */
           <div className="flex flex-col items-center justify-center py-10 text-center animate-fade-up">
-            <img
+            <img loading="lazy"
               src="/assets/sagui_aprovacao_2.png"
               alt="Sagui analisando dados"
               draggable={false}
@@ -477,8 +475,7 @@ export function ParentsDashboard() {
           /* Resultado da IA renderizado dinamicamente */
           <div className="animate-fade-up">
             <div className={`rounded-2xl border ${AI_RISK[aiState.result.risk].border} ${AI_RISK[aiState.result.risk].bg} p-6`}>
-              <p className="text-[11px] uppercase tracking-wider font-semibold text-gray-400 mb-2">
-                Previsão de risco de evasão · próximos 4 meses
+              <p className="text-[11px] uppercase tracking-wider font-semibold text-gray-400 mb-2"> Previsão de risco de evasão · próximos 4 meses
               </p>
               <p className={`text-4xl font-extrabold ${AI_RISK[aiState.result.risk].text}`}>
                 {aiState.result.risk}
@@ -488,15 +485,13 @@ export function ParentsDashboard() {
               </p>
             </div>
             <div className="flex items-center justify-between gap-3 mt-4">
-              <p className="text-[10px] text-gray-500">
-                ✨ Recomendação gerada por IA (Gemini) · baseada nos dados reais do aluno
+              <p className="text-[10px] text-gray-500"> Recomendação gerada por IA (Gemini) · baseada nos dados reais do aluno
               </p>
               <button
                 onClick={() => setAnalysisNonce(n => n + 1)}
                 className="shrink-0 text-[11px] font-semibold text-violet-300 hover:text-violet-200 bg-violet-500/10 border border-violet-500/20 rounded-lg px-3 py-1.5 transition-all"
                 title="Reexecutar a análise com a IA"
-              >
-                ↻ Reanalisar
+              > Reanalisar
               </button>
             </div>
           </div>
@@ -504,7 +499,7 @@ export function ParentsDashboard() {
           /* Fallback: regressão linear local quando a IA não está disponível */
           <div className="space-y-4 animate-fade-up">
             <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 px-4 py-3 text-xs text-amber-300/90 flex items-start gap-2">
-              <span>⚠️</span>
+              <span><TriangleAlert size={16} className="inline-block align-[-0.15em] text-amber-400" /></span>
               <span className="flex-1">
                 {aiState.status === 'error'
                   ? `Não foi possível conectar à IA (${aiState.error}). Exibindo estimativa local por regressão linear.`
@@ -513,8 +508,7 @@ export function ParentsDashboard() {
               <button
                 onClick={() => setAnalysisNonce(n => n + 1)}
                 className="shrink-0 text-amber-300 hover:text-amber-200 font-semibold underline"
-              >
-                Tentar de novo
+              > Tentar de novo
               </button>
             </div>
 

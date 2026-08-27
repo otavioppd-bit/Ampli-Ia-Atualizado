@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
+import { ClipboardList, LogOut, Moon, Sparkles, TriangleAlert, Users } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
-import { IconUsers, IconSparkles, IconMoon, IconLogOut } from '../../shared/ui/Icons';
 import Papa from 'papaparse';
 
 const WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || '';
@@ -98,7 +98,7 @@ export function EducatorPage() {
         <div className="max-w-5xl mx-auto px-4 md:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-600 flex items-center justify-center shadow-lg shadow-emerald-500/10">
-              <IconMoon size={20} className="text-gray-900" />
+              <Moon size={20} className="text-gray-900" />
             </div>
             <div>
               <h1 className="text-sm font-extrabold text-white">
@@ -109,11 +109,10 @@ export function EducatorPage() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-400 hidden md:block">{session?.nome}</span>
-            <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-medium border border-emerald-500/20">
-              Educacional
+            <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-medium border border-emerald-500/20"> Educacional
             </span>
             <button onClick={logout} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all" title="Sair">
-              <IconLogOut size={16} />
+              <LogOut size={16} />
             </button>
           </div>
         </div>
@@ -123,7 +122,7 @@ export function EducatorPage() {
         {/* Welcome */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/15 to-cyan-600/10 flex items-center justify-center text-lg">
-            <IconUsers size={20} className="text-emerald-400" />
+            <Users size={20} className="text-emerald-400" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Onboarding de Turmas</h2>
@@ -133,13 +132,11 @@ export function EducatorPage() {
 
         {/* Instructions */}
         <div className="glass rounded-2xl p-5 text-sm text-gray-400 space-y-1">
-          <p className="text-amber-400 font-medium mb-2">📋 Formato do CSV</p>
+          <p className="text-amber-400 font-medium mb-2"><ClipboardList size={16} className="inline-block align-[-0.15em] text-gray-400" /> Formato do CSV</p>
           <p>O arquivo deve conter as colunas (nesta ordem):</p>
-          <code className="block bg-black/30 rounded-lg px-3 py-2 text-xs text-gray-300 mt-2">
-            Nome do Aluno,Sala,Email do Responsável,Telefone do Responsável
+          <code className="block bg-black/30 rounded-lg px-3 py-2 text-xs text-gray-300 mt-2"> Nome do Aluno,Sala,Email do Responsável,Telefone do Responsável
           </code>
-          <p className="text-xs text-gray-500 mt-2">
-            Ex: <code className="bg-white/5 px-1 rounded">João Silva,3A,joao.responsavel@email.com,(11) 99999-8888</code>
+          <p className="text-xs text-gray-500 mt-2"> Ex: <code className="bg-white/5 px-1 rounded">João Silva,3A,joao.responsavel@email.com,(11) 99999-8888</code>
           </p>
         </div>
 
@@ -175,7 +172,7 @@ export function EducatorPage() {
 
         {error && (
           <div className="text-red-400 text-sm bg-red-500/10 rounded-xl px-4 py-3 border border-red-500/10 flex items-center gap-2">
-            <span>⚠️</span>
+            <span><TriangleAlert size={16} className="inline-block align-[-0.15em] text-amber-400" /></span>
             <span>{error}</span>
           </div>
         )}
@@ -188,8 +185,7 @@ export function EducatorPage() {
                 <h3 className="text-sm font-semibold text-white">Pré-visualização</h3>
                 <p className="text-xs text-gray-500">{parsedData.length} aluno{parsedData.length !== 1 ? 's' : ''} encontrado{parsedData.length !== 1 ? 's' : ''}</p>
               </div>
-              <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400">
-                Sala: {parsedData[0]?.Sala || '—'}
+              <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400"> Sala: {parsedData[0]?.Sala || '-'}
               </span>
             </div>
             <div className="max-h-40 overflow-y-auto space-y-1">
@@ -208,7 +204,7 @@ export function EducatorPage() {
               {sending ? (
                 <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Enviando...</>
               ) : (
-                <><IconSparkles size={16} /> Enviar para processamento</>
+                <><Sparkles size={16} /> Enviar para processamento</>
               )}
             </button>
           </div>
@@ -226,15 +222,14 @@ export function EducatorPage() {
             <p className="text-sm text-gray-400 mb-6">
               {parsedData.length} aluno{parsedData.length !== 1 ? 's' : ''} enviado{parsedData.length !== 1 ? 's' : ''} para a fila de criação de contas.
             </p>
-            <button onClick={() => { setSent(false); setFile(null); setParsedData([]); }} className="btn-secondary">
-              Enviar outra turma
+            <button onClick={() => { setSent(false); setFile(null); setParsedData([]); }} className="btn-secondary"> Enviar outra turma
             </button>
           </div>
         )}
 
         {!WEBHOOK_URL && (
           <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 p-3 text-xs text-amber-400 flex items-center gap-2">
-            <span>⚙️</span>
+            <TriangleAlert size={14} className="shrink-0" />
             <span>Webhook não configurado. Defina <code className="bg-black/30 px-1 rounded">VITE_N8N_WEBHOOK_URL</code> no .env para enviar os dados.</span>
           </div>
         )}

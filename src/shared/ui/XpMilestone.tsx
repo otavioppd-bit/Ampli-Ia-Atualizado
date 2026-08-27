@@ -1,4 +1,7 @@
 import { useMemo } from 'react';
+import { AnimatePresence, m, useReducedMotion } from 'motion/react';
+import { AnimatedNumber } from './AnimatedNumber';
+import { brilhoPulsante, celebracao, springTap } from '../lib/motionPresets';
 
 const CONFETTI_COLORS = ['#fbbf24', '#f59e0b', '#34d399', '#818cf8', '#f472b6', '#60a5fa', '#38bdf8'];
 
@@ -41,15 +44,23 @@ interface XpMilestoneProps {
   approvalMessage?: string;
 }
 
-export function XpMilestone({ open, xp, acertos, total, onClose, approval = false, approvalMessage = 'Etapa concluída! Você acertou em cheio. ✅' }: XpMilestoneProps) {
-  const confetti = useMemo(() => (open && !approval ? makeConfetti(22) : []), [open, approval]);
-
-  if (!open) return null;
+export function XpMilestone({ open, xp, acertos, total, onClose, approval = false, approvalMessage = 'Etapa concluída! Você acertou em cheio. ' }: XpMilestoneProps) {
+  const reduzir = useReducedMotion();
+  const confetti = useMemo(
+    () => (open && !approval && !reduzir ? makeConfetti(22) : []),
+    [open, approval, reduzir],
+  );
 
   return (
-    <div
+    <AnimatePresence>
+      {open && (
+    <m.div
       className="fixed inset-0 z-[320] flex items-center justify-center p-4"
       style={{ background: 'rgba(11, 17, 32, 0.78)', backdropFilter: 'blur(12px)' }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
     >
       {/* Confete explodindo ao redor */}
       {confetti.map((c, i) => (
@@ -68,7 +79,12 @@ export function XpMilestone({ open, xp, acertos, total, onClose, approval = fals
         />
       ))}
 
-      <div className="relative w-full max-w-md mm-milestone-panel">
+      <m.div
+        className="relative w-full max-w-md"
+        variants={reduzir ? undefined : celebracao}
+        initial={reduzir ? false : 'inicial'}
+        animate={reduzir ? undefined : 'animar'}
+      >
         {/* Sagui caindo do topo: alegria (XP) ou tablet com balão (aprovação) */}
         <div className="mm-mascot-drop relative mx-auto -mb-16 z-10" style={{ width: 150, height: 150 }}>
           <div
@@ -92,23 +108,34 @@ export function XpMilestone({ open, xp, acertos, total, onClose, approval = fals
         {/* XP saltando no centro da tela */}
         <div className="glass-card rounded-3xl p-8 text-center shadow-2xl border border-amber-500/20 relative overflow-visible">
           <div className="relative inline-flex items-center justify-center mt-10">
-            <div className="mm-milestone-glow" />
+            <m.div
+              className="mm-milestone-glow"
+              variants={reduzir ? undefined : brilhoPulsante}
+              initial={reduzir ? false : 'inicial'}
+              animate={reduzir ? undefined : 'animar'}
+            />
             <div className="mm-xp-pop relative z-10 flex flex-col items-center">
-              <span className="text-5xl md:text-6xl font-black text-gradient-amber tabular-nums drop-shadow">+{xp}</span>
+              <span className="text-5xl md:text-6xl font-black text-gradient-amber drop-shadow">+<AnimatedNumber value={xp} /></span>
               <span className="text-sm font-bold text-gray-300 tracking-widest uppercase mt-1">XP alcançado!</span>
             </div>
           </div>
 
-          <p className="mt-4 text-sm text-gray-400">
-            Você acertou <span className="text-emerald-400 font-semibold">{acertos}</span> de{' '}
-            <span className="text-white font-semibold">{total}</span> questões. Que maravilha! 🎉
+          <p className="mt-4 text-sm text-gray-400"> Você acertou <span className="text-emerald-400 font-semibold">{acertos}</span> de{' '}
+            <span className="text-white font-semibold">{total}</span> questões. Que maravilha! 
           </p>
 
-          <button onClick={onClose} className="btn-primary px-8 mt-6">
-            Continuar 💪
-          </button>
+          <m.button
+            onClick={onClose}
+            className="btn-primary px-8 mt-6"
+            whileTap={reduzir ? undefined : { scale: 0.96 }}
+            transition={springTap}
+          >
+            Continuar
+          </m.button>
         </div>
-      </div>
-    </div>
+      </m.div>
+    </m.div>
+      )}
+    </AnimatePresence>
   );
 }

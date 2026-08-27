@@ -1,0 +1,18 @@
+[
+  {
+    "nivel": "TOQUE",
+    "msg": "login @375px: 1 alvo(s) abaixo de 44px, ex.: 222x20\"Ainda não tem conta? Cri\""
+  },
+  {
+    "nivel": "TOQUE",
+    "msg": "chat @375px: 2 alvo(s) abaixo de 44px, ex.: 16x8\"\", 40x40\"\""
+  },
+  {
+    "nivel": "AVISO",
+    "msg": "mobile: clique em \"notebook\" bloqueado"
+  },
+  {
+    "nivel": "AVISO",
+    "msg": "mobile: clique em \"profile\" bloqueado"
+  }
+]

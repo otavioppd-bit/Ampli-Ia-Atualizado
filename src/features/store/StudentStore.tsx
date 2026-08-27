@@ -1,7 +1,13 @@
+import { useMemo } from 'react';
+import { m, useReducedMotion } from 'motion/react';
+import { atrasoDoItem, springTap } from '../../shared/lib/motionPresets';
 import { useAppStore } from '../../stores/appStore';
+import { Flame, Gift, Lightbulb, Lock, Target, Zap } from 'lucide-react';
 import { useStoreStore } from '../../stores/storeStore';
 import { SHOP_ITEMS } from '../../shared/lib/storeCatalog';
 import { calcLevel } from '../../shared/lib/utils';
+import { AppIcon } from '../../shared/ui/AppIcon';
+import { AnimatedNumber } from '../../shared/ui/AnimatedNumber';
 
 // Imagem padrão do Sagui exibida como "preview" dos itens
 const SAGUI_IDLE = '/assets/sagui_meditando_2.png';
@@ -9,22 +15,32 @@ const SAGUI_IDLE = '/assets/sagui_meditando_2.png';
 export function StudentStore() {
   const { gamification, setToast } = useAppStore();
   const { inventory, buyItem, equipItem } = useStoreStore();
+  const reduzir = useReducedMotion();
   const { level } = calcLevel(gamification.xp);
 
-  function handleBuy(itemId: string) {
-    const item = SHOP_ITEMS.find(i => i.id === itemId);
-    if (!item) return;
-    if (buyItem(itemId)) {
-      setToast(`🎉 ${item.name} adicionado ao seu armário!`, 'success');
-    } else {
-      setToast('Saldo insuficiente. Complete ciclos de foco para ganhar XP!', 'error');
-    }
+  // A vitrine depende so de saldo e inventario. Sem isto, cada toque em
+  // qualquer lugar do app reconstruia os tres cards com as imagens.
+  const vitrine = useMemo(
+    () =>
+      SHOP_ITEMS.map(item => ({
+        item,
+        purchased: !!inventory[item.id]?.purchased,
+        equipped: !!inventory[item.id]?.equipped,
+        affordable: gamification.xp >= item.price,
+      })),
+    [inventory, gamification.xp],
+  );
+
+  // A compra e assincrona: quem valida o preco e o saldo e o servidor.
+  // O proprio store ja emite o toast de sucesso ou o motivo da recusa.
+  async function handleBuy(itemId: string) {
+    await buyItem(itemId);
   }
 
-  function handleEquip(itemId: string) {
-    equipItem(itemId);
+  async function handleEquip(itemId: string) {
+    await equipItem(itemId);
     const item = SHOP_ITEMS.find(i => i.id === itemId);
-    if (item) setToast(`✨ ${item.emoji} Acessório ${item.name} equipado no Sagui!`, 'success');
+    if (item) setToast(`Acessório ${item.name} equipado no Sagui!`, 'success');
   }
 
   return (
@@ -54,8 +70,9 @@ export function StudentStore() {
           </div>
           <div>
             <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Saldo de XP</p>
-            <p className="text-xl font-extrabold text-amber-400 tabular-nums leading-none">
-              {gamification.xp.toLocaleString('pt-BR')} <span className="text-xs font-medium text-gray-500">XP</span>
+            <p className="text-xl font-extrabold text-amber-400 leading-none">
+              <AnimatedNumber value={gamification.xp} agrupar />{' '}
+              <span className="text-xs font-medium text-gray-500">XP</span>
             </p>
           </div>
           <span className="ml-1 px-2 py-1 rounded-full bg-white/5 text-[10px] text-gray-400 font-medium">Nv. {level}</span>
@@ -64,16 +81,14 @@ export function StudentStore() {
 
       {/* Vitrine */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {SHOP_ITEMS.map(item => {
-          const entry = inventory[item.id];
-          const purchased = !!entry?.purchased;
-          const equipped = !!entry?.equipped;
-          const affordable = gamification.xp >= item.price;
-
+        {vitrine.map(({ item, purchased, equipped, affordable }, i) => {
           return (
-            <div
+            <m.div
               key={item.id}
-              className={`glass rounded-2xl overflow-hidden border transition-all group ${
+              initial={reduzir ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={reduzir ? { duration: 0 } : { delay: atrasoDoItem(i), duration: 0.25 }}
+              className={`glass rounded-2xl overflow-hidden border transition-all group lift ${
                 equipped ? 'border-emerald-500/30' : 'border-white/5 hover:border-white/10'
               }`}
             >
@@ -86,11 +101,10 @@ export function StudentStore() {
                   className="w-32 h-32 object-contain mascot-assist-idle drop-shadow-[0_10px_20px_rgba(0,0,0,0.4)]"
                 />
                 <span className="absolute top-3 right-3 text-3xl select-none" aria-hidden>
-                  {item.emoji}
+                  <AppIcon name={item.icon} size={30} className="text-amber-300" />
                 </span>
                 {equipped && (
-                  <span className="absolute bottom-2.5 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-full bg-emerald-500/90 text-[10px] font-bold text-emerald-950 shadow-lg">
-                    ✓ EQUIPADO
+                  <span className="absolute bottom-2.5 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-full bg-emerald-500/90 text-[10px] font-bold text-emerald-950 shadow-lg"> EQUIPADO
                   </span>
                 )}
               </div>
@@ -101,7 +115,7 @@ export function StudentStore() {
                   <h3 className="font-bold text-white">{item.name}</h3>
                 </div>
                 <p className="text-xs text-gray-500 leading-relaxed min-h-[2rem]">{item.desc}</p>
-                <p className="text-[10px] text-gray-600 mt-1.5">💡 {item.benefit}</p>
+                <p className="text-[10px] text-gray-600 mt-1.5"><Lightbulb size={16} className="inline-block align-[-0.15em] text-amber-400" /> {item.benefit}</p>
 
                 {/* Valor */}
                 <div className="flex items-center gap-1.5 mt-3">
@@ -122,42 +136,40 @@ export function StudentStore() {
                       className={`btn w-full ${affordable ? 'btn-primary' : '!bg-white/[0.03] !text-gray-500 border border-white/5'}`}
                     >
                       {affordable ? (
-                        <>🎁 Comprar</>
+                        <><Gift size={16} className="inline-block align-[-0.15em] text-violet-400" /> Comprar</>
                       ) : (
-                        <>🔒 {item.price - gamification.xp} XP restantes</>
+                        <><Lock size={16} className="inline-block align-[-0.15em] text-gray-500" /> {item.price - gamification.xp} XP restantes</>
                       )}
                     </button>
                   ) : equipped ? (
                     <button
                       disabled
                       className="btn w-full !bg-emerald-500/15 !text-emerald-400 border border-emerald-500/25 cursor-default"
-                    >
-                      ✓ Equipado
+                    > Equipado
                     </button>
                   ) : (
-                    <button onClick={() => handleEquip(item.id)} className="btn w-full btn-secondary border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/10">
-                      ✨ Equipar
+                    <button onClick={() => handleEquip(item.id)} className="btn w-full btn-secondary border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/10"> Equipar
                     </button>
                   )}
                 </div>
               </div>
-            </div>
+            </m.div>
           );
         })}
       </div>
 
       {/* Como ganhar XP */}
       <div className="glass rounded-2xl p-5 border border-amber-500/10 bg-gradient-to-br from-amber-500/5 to-transparent">
-        <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">⚡ Como ganhar mais XP?</h3>
+        <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><Zap size={16} className="inline-block align-[-0.15em] text-amber-400" /> Como ganhar mais XP?</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-gray-400">
           <div className="rounded-xl bg-white/[0.03] border border-white/5 p-3 flex items-center gap-2.5">
-            <span className="text-lg">⏱️</span> Complete ciclos de <b className="text-gray-200">foco</b> na Companhia do Sagui
+            <span className="text-lg">⏱</span> Complete ciclos de <b className="text-gray-200">foco</b> na Companhia do Sagui
           </div>
           <div className="rounded-xl bg-white/[0.03] border border-white/5 p-3 flex items-center gap-2.5">
-            <span className="text-lg">🎯</span> Acerte questões no <b className="text-gray-200">Quiz</b> e nos desafios
+            <span className="text-lg"><Target size={16} className="inline-block align-[-0.15em] text-emerald-400" /></span> Acerte questões no <b className="text-gray-200">Quiz</b> e nos desafios
           </div>
           <div className="rounded-xl bg-white/[0.03] border border-white/5 p-3 flex items-center gap-2.5">
-            <span className="text-lg">🔥</span> Mantenha sua <b className="text-gray-200">sequência</b> diária de estudos
+            <span className="text-lg"><Flame size={16} className="inline-block align-[-0.15em] text-amber-400" /></span> Mantenha sua <b className="text-gray-200">sequência</b> diária de estudos
           </div>
         </div>
       </div>

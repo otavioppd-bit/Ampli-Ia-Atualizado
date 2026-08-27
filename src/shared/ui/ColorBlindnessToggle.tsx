@@ -20,6 +20,14 @@ const OPTIONS: GroupOption[] = [
   { type: 'achromatomaly', label: 'Acromatomalia (monocromático parcial)', group: 'Completo' },
 ];
 
+/*
+ * Unica preferencia que fica em localStorage de proposito.
+ *
+ * O filtro de daltonismo precisa valer JA na tela de login, antes de haver
+ * sessao para consultar. E uma configuracao de acessibilidade do
+ * dispositivo, sem dado pessoal, entao guardar local e o comportamento
+ * certo: quem usa o computador da escola nao herda o ajuste da conta.
+ */
 const STORAGE_KEY = 'mm_color_blindness';
 
 function getInitialType(): ColorBlindnessType {
@@ -58,7 +66,7 @@ export function ColorBlindnessToggle() {
     <div className="fixed top-4 right-4 z-50">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`glass-light rounded-xl px-3 py-2 text-xs border transition-all flex items-center gap-2 ${
+        className={`glass-light rounded-xl px-3 py-2 text-xs border transition-all flex items-center justify-center gap-2 min-h-[44px] min-w-[44px] ${
           current !== 'normal'
             ? 'border-amber-500/30 text-amber-400 hover:border-amber-500/50'
             : 'border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/10'

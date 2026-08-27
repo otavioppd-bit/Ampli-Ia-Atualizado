@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { TabId } from '../types';
 import { Mascot } from './Mascot';
+import { AppIcon } from './AppIcon';
+import { supabaseRepository } from '../storage/SupabaseRepository';
 
 interface Step {
   id: string;
@@ -13,17 +15,17 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { id: 'welcome', title: 'Bem-vindo ao Midnight Mentor!', description: 'Vamos fazer um tour rápido pelo seu novo assistente de estudos para o ENEM. Conheça cada ferramenta e comece a estudar com inteligência.', icon: '🌙', tab: 'dashboard' },
-  { id: 'dashboard', title: 'Central de Estudos', description: 'Seu painel principal. Veja o plano de estudos do dia, registre seu humor, acompanhe seu SSC e gerencie suas tarefas diárias.', icon: '🏠', tab: 'dashboard', targetSelector: '[data-tab="dashboard"]' },
-  { id: 'chat', title: 'Mentor IA', description: 'Converse com seu mentor virtual. Tire dúvidas, receba dicas de estudo e suporte emocional personalizado.', icon: '🧠', tab: 'chat', targetSelector: '[data-tab="chat"]' },
-  { id: 'essay', title: 'Redação 1000', description: 'Pratique redação no formato ENEM. Receba correção automática com nota por cada competência.', icon: '✍️', tab: 'essay', targetSelector: '[data-tab="essay"]' },
-  { id: 'foco', title: 'Modo Foco', description: 'Use o modo foco para estudar em blocos curtos, manter ritmo e evitar distrações.', icon: '⏱️', tab: 'foco', targetSelector: '[data-tab="foco"]' },
-  { id: 'quiz', title: 'Quiz Interativo', description: 'Teste seus conhecimentos com perguntas de múltipla escolha. Ganhe XP e veja seu progresso.', icon: '🎯', tab: 'quiz', targetSelector: '[data-tab="quiz"]' },
-  { id: 'comunidade', title: 'Ligas de estudo', description: 'Entre em ligas da sua turma, complete metas e use o chat focado da sua equipe.', icon: '🤝', tab: 'comunidade', targetSelector: '[data-tab="comunidade"]' },
-  { id: 'ranking', title: 'Ranking e evolução', description: 'Acompanhe sua posição, evolução e os resultados das suas atividades de estudo.', icon: '🏆', tab: 'ranking', targetSelector: '[data-tab="ranking"]' },
-  { id: 'notebook', title: 'Caderno de Estudos', description: 'Crie anotações organizadas com tags e busca rápida. Seu material de revisão sempre à mão.', icon: '📓', tab: 'notebook', targetSelector: '[data-tab="notebook"]' },
-  { id: 'profile', title: 'Perfil e Progresso', description: 'Acompanhe seu nível, XP total, sequência de dias de estudo e todo seu histórico.', icon: '👤', tab: 'profile', targetSelector: '[data-tab="profile"]' },
-  { id: 'done', title: 'Tudo pronto! 🚀', description: 'Agora você conhece todas as ferramentas. Explore cada aba, complete seus planos e evolua seu nível. Bons estudos!', icon: '🎉', tab: 'dashboard' },
+  { id: 'welcome', title: 'Bem-vindo ao Midnight Mentor!', description: 'Vamos fazer um tour rápido pelo seu novo assistente de estudos para o ENEM. Conheça cada ferramenta e comece a estudar com inteligência.', icon: 'luaCheia', tab: 'dashboard' },
+  { id: 'dashboard', title: 'Central de Estudos', description: 'Seu painel principal. Veja o plano de estudos do dia, registre seu humor, acompanhe seu SSC e gerencie suas tarefas diárias.', icon: 'bussola', tab: 'dashboard', targetSelector: '[data-tab="dashboard"]' },
+  { id: 'chat', title: 'Mentor', description: 'Converse com o sagui. Tire dúvidas, receba dicas de estudo e suporte emocional personalizado.', icon: 'marcador', tab: 'chat', targetSelector: '[data-tab="chat"]' },
+  { id: 'essay', title: 'Redação 1000', description: 'Pratique redação no formato ENEM. Receba correção automática com nota por cada competência.', icon: 'escrita', tab: 'essay', targetSelector: '[data-tab="essay"]' },
+  { id: 'foco', title: 'Modo Foco', description: 'Use o modo foco para estudar em blocos curtos, manter ritmo e evitar distrações.', icon: '⏱', tab: 'foco', targetSelector: '[data-tab="foco"]' },
+  { id: 'quiz', title: 'Quiz Interativo', description: 'Teste seus conhecimentos com perguntas de múltipla escolha. Ganhe XP e veja seu progresso.', icon: 'alvo', tab: 'quiz', targetSelector: '[data-tab="quiz"]' },
+  { id: 'comunidade', title: 'Ligas de estudo', description: 'Entre em ligas da sua turma, complete metas e use o chat focado da sua equipe.', icon: 'trofeu', tab: 'comunidade', targetSelector: '[data-tab="comunidade"]' },
+  { id: 'ranking', title: 'Ranking e evolução', description: 'Acompanhe sua posição, evolução e os resultados das suas atividades de estudo.', icon: 'subida', tab: 'ranking', targetSelector: '[data-tab="ranking"]' },
+  { id: 'notebook', title: 'Caderno de Estudos', description: 'Crie anotações organizadas com tags e busca rápida. Seu material de revisão sempre à mão.', icon: 'caderno', tab: 'notebook', targetSelector: '[data-tab="notebook"]' },
+  { id: 'profile', title: 'Perfil e Progresso', description: 'Acompanhe seu nível, XP total, sequência de dias de estudo e todo seu histórico.', icon: 'estrela', tab: 'profile', targetSelector: '[data-tab="profile"]' },
+  { id: 'done', title: 'Tudo pronto! ', description: 'Agora você conhece todas as ferramentas. Explore cada aba, complete seus planos e evolua seu nível. Bons estudos!', icon: 'festa', tab: 'dashboard' },
 ];
 
 interface Rect { top: number; left: number; width: number; height: number; }
@@ -38,13 +40,13 @@ function SpotlightOverlay({ rect, padding = 12 }: { rect: Rect; padding?: number
 
   return (
     <>
-      {/* Top bar — from top of screen to top of target */}
+      {/* Top bar - from top of screen to top of target */}
       <div className="fixed z-[199] bg-black/70" style={{ top: 0, left: 0, right: 0, height: r.top, pointerEvents: 'auto' }} />
-      {/* Bottom bar — from bottom of target to bottom of screen */}
+      {/* Bottom bar - from bottom of target to bottom of screen */}
       <div className="fixed z-[199] bg-black/70" style={{ left: 0, right: 0, top: r.top + r.height, bottom: 0, pointerEvents: 'auto' }} />
-      {/* Left bar — between top and bottom, left side to target */}
+      {/* Left bar - between top and bottom, left side to target */}
       <div className="fixed z-[199] bg-black/70" style={{ top: r.top, left: 0, width: r.left, height: r.height, pointerEvents: 'auto' }} />
-      {/* Right bar — between top and bottom, target right to screen edge */}
+      {/* Right bar - between top and bottom, target right to screen edge */}
       <div className="fixed z-[199] bg-black/70" style={{ top: r.top, left: r.left + r.width, right: 0, height: r.height, pointerEvents: 'auto' }} />
       {/* Glowing border around the cutout */}
       <div
@@ -107,7 +109,9 @@ export function OnboardingTour() {
 
   function handleNext() {
     if (isLast) {
-      localStorage.setItem('mm_tutorial_complete', 'true');
+      // Silencio proposital: marca que o tour ja foi visto. Falhar so faz
+      // o tour reaparecer uma vez, o que nao justifica um aviso de erro.
+      supabaseRepository.savePreferencias({ tutorial_completo: true }).catch(() => {});
       addXP(50);
       addLog({ timestamp: Date.now(), type: 'tutorial', description: 'Completou o tour guiado', xp: 50 });
       setShowTutorial(false);
@@ -117,7 +121,9 @@ export function OnboardingTour() {
   }
 
   function handleSkip() {
-    localStorage.setItem('mm_tutorial_complete', 'true');
+    // Silencio proposital, mesma razao de handleFinish: falhar so faz o
+    // tour reaparecer uma vez, o que nao justifica um aviso de erro.
+    supabaseRepository.savePreferencias({ tutorial_completo: true }).catch(() => {});
     setShowTutorial(false);
   }
 
@@ -167,8 +173,8 @@ export function OnboardingTour() {
         }}
       >
         <div className="glass-card rounded-3xl p-7 text-center shadow-2xl border border-white/10" style={{ pointerEvents: 'auto' }}>
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center text-3xl mx-auto mb-5 shadow-glow">
-            {step.icon}
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center mx-auto mb-5 shadow-glow">
+            <AppIcon name={step.icon} size={28} className="text-gray-900" />
           </div>
 
           <h2 className="text-lg font-bold text-white mb-2">{step.title}</h2>
@@ -189,17 +195,15 @@ export function OnboardingTour() {
 
           {/* Buttons */}
           <div className="flex items-center justify-between gap-3">
-            <button onClick={handleSkip} className="btn-ghost text-xs text-gray-500 hover:text-gray-300">
-              Pular tour
+            <button onClick={handleSkip} className="btn-ghost text-xs text-gray-500 hover:text-gray-300"> Pular tour
             </button>
             <div className="flex items-center gap-2">
               {!isFirst && (
-                <button onClick={() => setTutorialStep(tutorialStep - 1)} className="btn-ghost text-sm px-3 py-2 text-gray-400">
-                  ← Voltar
+                <button onClick={() => setTutorialStep(tutorialStep - 1)} className="btn-ghost text-sm px-3 py-2 text-gray-400"> Voltar
                 </button>
               )}
               <button onClick={handleNext} className="btn-primary px-6">
-                {isLast ? 'Começar!' : 'Próximo →'}
+                {isLast ? 'Começar!' : 'Próximo '}
               </button>
             </div>
           </div>

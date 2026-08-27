@@ -1,29 +1,36 @@
-import { useState, useEffect, useCallback } from 'react';
+import { memo, useState, useEffect, useCallback, useMemo } from 'react';
+import { m, useReducedMotion } from 'motion/react';
+import { atrasoDoItem, MAX_STAGGER } from '../../shared/lib/motionPresets';
+import { Medal, TrendingUp, Trophy, Users } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
+import { ListSkeleton } from '../../shared/ui/Skeleton';
 import { getRankingData } from '../../shared/lib/rankingEngine';
-import { IconTrophy, IconTrendingUp, IconUsersGroup } from '../../shared/ui/Icons';
 import type { RankingFilter, RankingData, RankingEntry } from '../../shared/types';
 
-const FILTERS: { id: RankingFilter; label: string; icon: typeof IconTrophy }[] = [
-  { id: 'geral', label: 'Geral', icon: IconTrophy },
-  { id: 'turma', label: 'Turma', icon: IconUsersGroup },
-  { id: 'escola', label: 'Escola', icon: IconTrendingUp },
+const FILTERS: { id: RankingFilter; label: string; icon: typeof Trophy }[] = [
+  { id: 'geral', label: 'Geral', icon: Trophy },
+  { id: 'turma', label: 'Turma', icon: Users },
+  { id: 'escola', label: 'Escola', icon: TrendingUp },
 ];
 
-const MEDALHAS = ['🥇', '🥈', '🥉'];
+/* O brief pede Medal em tres cores para o podio. Eram emojis, que cada
+   sistema desenhava diferente. */
+const MEDALHA_COR = ['text-amber-400', 'text-gray-300', 'text-orange-700'];
 
-const AVATAR_EMOJIS = ['🐯', '🦁', '🐺', '🦅', '🐉', '🦈', '🐆', '🦊', '🐬', '🦉', '🐻', '🦄', '🐲', '🦋', '🐙', '🦩'];
-
-function getAvatarEmoji(nome: string): string {
-  let hash = 0;
-  for (let i = 0; i < nome.length; i++) {
-    hash = ((hash << 5) - hash) + nome.charCodeAt(i);
-    hash |= 0;
-  }
-  return AVATAR_EMOJIS[Math.abs(hash) % AVATAR_EMOJIS.length];
+/** Inicial do apelido: identifica sem expor nome real e sem emoji. */
+function inicialDoApelido(nome: string): string {
+  return (nome.trim()[0] || '?').toUpperCase();
 }
 
-function EntryRow({ entry, isCurrentUser }: { entry: RankingEntry; isCurrentUser: boolean }) {
+/**
+ * Linha do ranking, memoizada.
+ *
+ * Sao ate 48 entradas. Sem memo, qualquer mudanca de estado no pai (troca
+ * de filtro, chegada de XP) reconstroi as 48. E tambem pre-requisito para
+ * o stagger da proxima fase: animar itens que re-renderizam em cascata
+ * produz exatamente o engasgo que a animacao deveria evitar.
+ */
+const EntryRow = memo(function EntryRow({ entry, isCurrentUser }: { entry: RankingEntry; isCurrentUser: boolean }) {
   const isTop3 = entry.posicao <= 3;
 
   return (
@@ -37,7 +44,7 @@ function EntryRow({ entry, isCurrentUser }: { entry: RankingEntry; isCurrentUser
       {/* Position */}
       <div className="w-8 shrink-0 text-center">
         {isTop3 ? (
-          <span className="text-lg">{MEDALHAS[entry.posicao - 1]}</span>
+          <Medal size={20} className={`mx-auto ${MEDALHA_COR[entry.posicao - 1]}`} />
         ) : (
           <span className="text-sm font-bold tabular-nums text-gray-500">{entry.posicao}</span>
         )}
@@ -49,8 +56,8 @@ function EntryRow({ entry, isCurrentUser }: { entry: RankingEntry; isCurrentUser
           {entry.avatarInicial}
         </div>
       ) : (
-        <div className="w-9 h-9 rounded-xl bg-white/[0.03] flex items-center justify-center text-lg shrink-0">
-          {getAvatarEmoji(entry.nome)}
+        <div className="w-9 h-9 rounded-xl bg-white/[0.05] flex items-center justify-center text-sm font-bold text-gray-400 shrink-0">
+          {inicialDoApelido(entry.nome)}
         </div>
       )}
 
@@ -61,15 +68,16 @@ function EntryRow({ entry, isCurrentUser }: { entry: RankingEntry; isCurrentUser
             {entry.nome}
           </span>
           {isCurrentUser && (
-            <span className="text-[9px] font-medium text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded-full shrink-0">
-              VOCÊ
+            <span className="text-[9px] font-medium text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded-full shrink-0"> VOCÊ
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-gray-500">
-          <span>{entry.turma}</span>
-          <span className="w-1 h-1 rounded-full bg-gray-600" />
-          <span>{entry.escola}</span>
+        {/* Uma linha so: quebrando em tres, a altura variava e o ranking
+            ficava dificil de varrer com o olho. */}
+        <div className="flex items-center gap-2 text-[11px] text-gray-500 min-w-0">
+          <span className="truncate">{entry.turma}</span>
+          <span className="w-1 h-1 rounded-full bg-gray-600 shrink-0" />
+          <span className="truncate">{entry.escola}</span>
         </div>
       </div>
 
@@ -87,32 +95,104 @@ function EntryRow({ entry, isCurrentUser }: { entry: RankingEntry; isCurrentUser
       </div>
     </div>
   );
-}
+});
 
 export function RankingPage() {
+  const reduzir = useReducedMotion();
   const { session, gamification } = useAppStore();
   const [filter, setFilter] = useState<RankingFilter>('geral');
   const [data, setData] = useState<RankingData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  /*
+   * A carga NAO depende mais de gamification.xp.
+   *
+   * Antes o XP estava nas dependencias, entao cada ponto ganho regenerava
+   * as 48 entradas do zero, com hash de string por apelido. Sob CPU 4x
+   * isso aparecia como bloqueio de ~300ms. Agora a lista e montada uma vez
+   * por filtro, e a linha do proprio aluno e atualizada em separado, que
+   * custa uma reordenacao de 49 itens.
+   */
   const loadRanking = useCallback(async () => {
     if (!session) return;
     setLoading(true);
     const result = await getRankingData(filter, session.uid, gamification.xp, gamification.streak);
     setData(result);
     setLoading(false);
-  }, [filter, session, gamification.xp, gamification.streak]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, session?.uid]);
 
   useEffect(() => { loadRanking(); }, [loadRanking]);
 
-  const currentUserEntry = data?.entries.find(e => e.destaque);
+  /** Reflete o XP atual do aluno sem refazer a lista inteira. */
+  const entradas = useMemo(() => {
+    if (!data) return [];
+    const atualizadas = data.entries.map(e =>
+      e.destaque ? { ...e, xp: gamification.xp, streak: gamification.streak } : e,
+    );
+    atualizadas.sort((a, b) => b.xp - a.xp);
+    return atualizadas.map((e, i) => ({ ...e, posicao: i + 1 }));
+  }, [data, gamification.xp, gamification.streak]);
+
+  const currentUserEntry = entradas.find(e => e.destaque);
+
+  /*
+   * As linhas entram em blocos, nao todas de uma vez.
+   *
+   * Medido: 49 linhas x 23 nos = 1127 nos de DOM, 95% de tudo que existe
+   * nesta pagina, criados no MESMO quadro em que a aba abre. Isso rendia
+   * uma tarefa de ~180ms, e enquanto ela roda o navegador nao consegue
+   * desenhar a transicao: e exatamente o engasgo que a animacao deveria
+   * evitar. `content-visibility` ja evita PINTAR o que esta fora da tela,
+   * mas nao evita CRIAR os nos, entao nao resolvia este caso.
+   *
+   * Agora o primeiro quadro monta so o que cabe na tela e o restante entra
+   * nos quadros ociosos seguintes. As linhas que ainda nao existem ocupam
+   * um espacador de 1 no com a mesma altura (63px, medida e uniforme
+   * desde que a linha secundaria passou a truncar), entao a lista ja nasce
+   * com a altura final e a rolagem nao pula sob o dedo de quem comecou a
+   * rolar antes de terminar.
+   */
+  /*
+   * O primeiro bloco cobre a tela; os seguintes sao maiores.
+   *
+   * Blocos pequenos e iguais (6 em 6) resolviam a tarefa longa mas a lista
+   * demorava mais de 3s para completar sob CPU 4x, e quem rolasse rapido
+   * encontrava buracos. O que importa mesmo e nao competir com a TRANSICAO
+   * de entrada, que dura ~300ms: depois dela um bloco maior passa
+   * despercebido, porque nao ha animacao para engasgar.
+   *
+   * Entao: 10 linhas no primeiro quadro (o que cabe em 812px de altura),
+   * e o restante em blocos de 20, fechando as 49 em tres passos.
+   */
+  const PRIMEIRO_BLOCO = 10;
+  const BLOCO_SEGUINTE = 20;
+  const [renderizadas, setRenderizadas] = useState(PRIMEIRO_BLOCO);
+
+  // Recomeça a cada troca de filtro: a lista nova tem outras linhas.
+  useEffect(() => { setRenderizadas(PRIMEIRO_BLOCO); }, [filter]);
+
+  useEffect(() => {
+    if (renderizadas >= entradas.length) return;
+    /*
+     * requestIdleCallback cede a vez para rolagem e toque. O `timeout`
+     * e essencial: sem ele, um aparelho que nunca fica ocioso adia o
+     * bloco indefinidamente e a lista nunca termina de preencher.
+     * Safari ainda nao tem a API, e ali o setTimeout faz o papel.
+     */
+    const agendar =
+      window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 32));
+    const cancelar = window.cancelIdleCallback ?? window.clearTimeout;
+    const id = agendar(() => setRenderizadas((n) => n + BLOCO_SEGUINTE), { timeout: 250 });
+    return () => cancelar(id as number);
+  }, [renderizadas, entradas.length]);
 
   return (
     <div className="space-y-5 animate-fade-up">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-600/10 flex items-center justify-center">
-          <IconTrophy size={20} className="text-amber-400" />
+          <Trophy size={20} className="text-amber-400" />
         </div>
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-white">Ranking</h1>
@@ -129,7 +209,7 @@ export function RankingPage() {
             <button
               key={f.id}
               onClick={() => setFilter(f.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              className={`flex items-center gap-2 px-4 py-3 min-h-[44px] rounded-xl text-sm font-medium transition-all ${
                 isActive
                   ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-sm'
                   : 'text-gray-400 hover:text-gray-200 border border-white/5 hover:bg-white/[0.03]'
@@ -151,7 +231,7 @@ export function RankingPage() {
           </div>
           <div className="glass rounded-xl px-4 py-3 text-center">
             <p className="text-lg font-bold text-white tabular-nums">
-              {currentUserEntry?.posicao || '—'}°
+              {currentUserEntry?.posicao || '-'}°
             </p>
             <p className="text-[10px] text-gray-500 mt-0.5">Sua posição</p>
           </div>
@@ -162,8 +242,7 @@ export function RankingPage() {
             <p className="text-[10px] text-gray-500 mt-0.5">Seu XP</p>
           </div>
           <div className="glass rounded-xl px-4 py-3 text-center">
-            <p className="text-lg font-bold text-white tabular-nums">
-              Nv. {gamification.level}
+            <p className="text-lg font-bold text-white tabular-nums"> Nv. {gamification.level}
             </p>
             <p className="text-[10px] text-gray-500 mt-0.5">Seu nível</p>
           </div>
@@ -173,42 +252,72 @@ export function RankingPage() {
       {/* Ranking list */}
       <div className="glass rounded-2xl overflow-hidden">
         {loading ? (
-          <div className="p-8 space-y-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 animate-shimmer" style={{
-                background: 'linear-gradient(90deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.02) 100%)',
-                backgroundSize: '200% 100%',
-                borderRadius: '12px',
-                height: '56px',
-              }} />
-            ))}
+          // Skeleton compartilhado, em vez do gradiente inline duplicado
+          // que existia so aqui.
+          <div className="p-6">
+            <ListSkeleton rows={8} />
           </div>
         ) : (
           <div className="p-3 space-y-1">
             {/* Header info */}
-            {data && data.entries.length === 0 && (
-              <div className="text-center py-12">
-                <div className="w-14 h-14 rounded-2xl bg-white/[0.02] flex items-center justify-center text-3xl mx-auto mb-3">
-                  🏆
-                </div>
-                <p className="text-gray-400 font-medium">Nenhum participante</p>
-                <p className="text-sm text-gray-500 mt-1">Convide colegas para aparecerem no ranking!</p>
+            {data && entradas.length === 0 && (
+              <div className="text-center py-12 flex flex-col items-center">
+                {/* Estado vazio com o mascote em vez de caixa cinza */}
+                <img
+                  src="/assets/sagui_meditando_2.png"
+                  alt=""
+                  width={112}
+                  height={112}
+                  loading="lazy"
+                  className="w-28 h-28 object-contain mb-3 opacity-90 motion-safe:animate-float-suave"
+                />
+                <p className="text-gray-300 font-medium">Ranking ainda vazio</p>
+                <p className="text-sm text-gray-500 mt-1 max-w-xs">
+                  Chame a galera da sua turma. O sagui guarda o primeiro lugar.
+                </p>
               </div>
             )}
-            {data?.entries.map(entry => (
-              <EntryRow
-                key={`${entry.nome}_${entry.escolaId}`}
-                entry={entry}
-                isCurrentUser={!!entry.destaque}
-              />
-            ))}
+            {/* `layout` faz a linha DESLIZAR quando a posicao muda, que num
+                ranking e parte da recompensa. Mas o Motion precisa MEDIR
+                cada elemento com layout a cada quadro, e com 49 linhas isso
+                custou 265ms de bloqueio no teste sob CPU 4x.
+                Solucao: so as MAX_STAGGER primeiras animam. Sao as que o
+                aluno realmente ve; da 11a em diante a linha entra pronta,
+                exatamente como o brief pede. */}
+            {entradas.map((entry, i) => {
+              const chave = `${entry.nome}_${entry.escolaId}`;
+
+              /* Ainda nao montada: reserva a altura com um no so. */
+              if (i >= renderizadas) {
+                return <div key={chave} className="linha-ranking h-[63px]" />;
+              }
+
+              const linha = <EntryRow entry={entry} isCurrentUser={!!entry.destaque} />;
+
+              if (reduzir || i >= MAX_STAGGER) {
+                return <div key={chave} className="linha-ranking">{linha}</div>;
+              }
+
+              return (
+                <m.div
+                  key={chave}
+                  className="linha-ranking"
+                  layout="position"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: atrasoDoItem(i), duration: 0.25 }}
+                >
+                  {linha}
+                </m.div>
+              );
+            })}
           </div>
         )}
       </div>
 
       {/* Info footer */}
       <div className="text-center text-xs text-gray-600 leading-relaxed">
-        <p>🏆 Ranking atualizado em tempo real. Complete atividades e quizzes para ganhar XP e subir posições!</p>
+        <p><Trophy size={16} className="inline-block align-[-0.15em] text-amber-400" /> Ranking atualizado em tempo real. Complete atividades e quizzes para ganhar XP e subir posições!</p>
       </div>
     </div>
   );

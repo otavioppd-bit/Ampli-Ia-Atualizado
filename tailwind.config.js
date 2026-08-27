@@ -67,6 +67,17 @@ export default {
         'spin-slow': 'spin 3s linear infinite',
         'progress': 'progress 1s ease-out forwards',
         stroke: 'stroke 1.5s cubic-bezier(0.16,1,0.3,1) forwards',
+        // Erro no quiz: sacode curto, sem deslocar o layout (so transform).
+        shake: 'shake 0.4s cubic-bezier(0.36,0.07,0.19,0.97)',
+        // "+10 XP" subindo e sumindo ao concluir uma tarefa.
+        'fade-up-out': 'fadeUpOut 1s cubic-bezier(0.16,1,0.3,1) forwards',
+        // Bottom sheet do menu "Mais".
+        'sheet-up': 'sheetUp 0.3s cubic-bezier(0.16,1,0.3,1)',
+        // Brilho percorrendo o skeleton enquanto carrega.
+        'skeleton': 'skeleton 1.2s ease-in-out infinite',
+        // Idle do mascote nos estados vazios: so translateY, sem tocar
+        // em layout. 4px e o suficiente para dar vida sem distrair.
+        'float-suave': 'floatSuave 3s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -115,6 +126,30 @@ export default {
         },
         progress: {
           '0%': { width: '0%' },
+        },
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '20%': { transform: 'translateX(-6px)' },
+          '40%': { transform: 'translateX(5px)' },
+          '60%': { transform: 'translateX(-3px)' },
+          '80%': { transform: 'translateX(2px)' },
+        },
+        fadeUpOut: {
+          '0%': { opacity: '0', transform: 'translateY(4px) scale(0.9)' },
+          '25%': { opacity: '1', transform: 'translateY(-6px) scale(1)' },
+          '100%': { opacity: '0', transform: 'translateY(-34px) scale(1)' },
+        },
+        sheetUp: {
+          '0%': { transform: 'translateY(100%)' },
+          '100%': { transform: 'translateY(0)' },
+        },
+        skeleton: {
+          '0%, 100%': { opacity: '0.45' },
+          '50%': { opacity: '0.8' },
+        },
+        floatSuave: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-4px)' },
         },
       },
       backgroundImage: {

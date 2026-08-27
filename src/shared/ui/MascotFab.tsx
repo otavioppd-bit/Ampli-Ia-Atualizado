@@ -1,24 +1,27 @@
 import { useEffect, useRef } from 'react';
+import { m, useReducedMotion } from 'motion/react';
+import { springTap } from '../lib/motionPresets';
 import { Mascot } from './Mascot';
 import { mascotStore } from '../../stores/mascotStore';
 
 const FAB_TIPS = [
-  '💡 Tente encher a barra de XP com um quiz rápido!',
-  '🔥 Mantenha seu streak acessando todos os dias.',
-  '📝 A redação vale até 1000 pontos — não pule!',
-  '🧠 Um plano de estudo focado rende mais que horas soltas.',
-  '⚡ Modo Foco te ajuda a render melhor no Pomodoro.',
-  '💚 Está cansado? Priorize descanso e retome amanhã.',
-  '🎯 Nada acertou? Entenda o porquê de cada erro e evolua!',
+  ' Tente encher a barra de XP com um quiz rápido!',
+  ' Mantenha seu streak acessando todos os dias.',
+  ' A redação vale até 1000 pontos - não pule!',
+  ' Um plano de estudo focado rende mais que horas soltas.',
+  ' Modo Foco te ajuda a render melhor no Pomodoro.',
+  ' Está cansado? Priorize descanso e retome amanhã.',
+  ' Nada acertou? Entenda o porquê de cada erro e evolua!',
 ];
 
 /**
  * Mascote flutuante (canto da tela).
  * Espelha a máquina de estados global (idle/typing/loading/success/error)
- * alimentada pelo app — ex.: Quiz, level up, streak. O clique dá dicas
+ * alimentada pelo app - ex.: Quiz, level up, streak. O clique dá dicas
  * com um balão transitório via `say()`.
  */
 export function MascotFab() {
+  const reduzir = useReducedMotion();
   const indexRef = useRef(Math.floor(Math.random() * FAB_TIPS.length));
 
   useEffect(() => {
@@ -34,13 +37,16 @@ export function MascotFab() {
   };
 
   return (
-    <div
+    <m.div
       className="fixed z-[80] bottom-28 md:bottom-16 md:right-8 right-3 cursor-pointer"
       onClick={handleClick}
       role="button"
-      aria-label="Mascote — dicas e reações"
+      aria-label="Mascote: dicas e reações"
+      whileHover={reduzir ? undefined : { scale: 1.05 }}
+      whileTap={reduzir ? undefined : { scale: 0.95 }}
+      transition={springTap}
     >
       <Mascot size={84} variant="floating" />
-    </div>
+    </m.div>
   );
 }

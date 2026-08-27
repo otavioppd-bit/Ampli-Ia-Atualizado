@@ -32,33 +32,72 @@ export const TURMAS: Turma[] = [
 ];
 
 const ADJETIVOS = [
-  'Determinado', 'Focado', 'Persistente', 'Incansável', 'Brillante',
-  'Estratégico', 'Disciplinado', 'Intenso', 'Dedicado', 'Guerreiro',
-  'Supremo', 'Ágil', 'Veloz', 'Expert', 'Ninja',
-  'Lendário', 'Invencível', 'Poderoso', 'Sábio', 'Audaz',
-  'Valente', 'Campeão', 'Raio', 'Fera', 'Mestre',
-  'Super', 'Turbo', 'Ligeiro', 'Top', 'Brabo',
+  'Determinado',
+  'Focado',
+  'Persistente',
+  'Incansável',
+  'Brillante',
+  'Estratégico',
+  'Disciplinado',
+  'Intenso',
+  'Dedicado',
+  'Guerreiro',
+  'Supremo',
+  'Ágil',
+  'Veloz',
+  'Expert',
+  'Ninja',
+  'Lendário',
+  'Invencível',
+  'Poderoso',
+  'Sábio',
+  'Audaz',
+  'Valente',
+  'Campeão',
+  'Raio',
+  'Fera',
+  'Mestre',
+  'Super',
+  'Turbo',
+  'Ligeiro',
+  'Top',
+  'Brabo',
 ];
 
 const ANIMAIS = [
-  'Coruja', 'Leão', 'Fênix', 'Tubarão', 'Águia',
-  'Pantera', 'Lobo', 'Falcão', 'Tigre', 'Grifo',
-  'Orca', 'Gavião', 'Cervo', 'Lince', 'Bufalo',
-  'Jaguar', 'Condor', 'Lontra', 'Zebra', 'Gazela',
-  'Puma', 'Harpia', 'Tucano', 'Arara', 'Pégaso',
+  'Coruja',
+  'Leão',
+  'Fênix',
+  'Tubarão',
+  'Águia',
+  'Pantera',
+  'Lobo',
+  'Falcão',
+  'Tigre',
+  'Grifo',
+  'Orca',
+  'Gavião',
+  'Cervo',
+  'Lince',
+  'Bufalo',
+  'Jaguar',
+  'Condor',
+  'Lontra',
+  'Zebra',
+  'Gazela',
+  'Puma',
+  'Harpia',
+  'Tucano',
+  'Arara',
+  'Pégaso',
 ];
 
-const EMOJIS_RANKING = [
-  '🚀', '🔥', '💪', '⚡', '🎯', '🌟', '✨', '💎',
-  '🏆', '📚', '🧠', '🎓', '⭐', '🌀', '💫', '🔮',
-];
-
+/** Apelido anonimo e estavel: o ranking nao expoe nome real de ninguem. */
 function gerarNickname(seed: number): string {
   const adj = ADJETIVOS[Math.floor(seedRandom(seed) * ADJETIVOS.length)];
   const animal = ANIMAIS[Math.floor(seedRandom(seed + 50) * ANIMAIS.length)];
-  const emoji = EMOJIS_RANKING[Math.floor(seedRandom(seed + 100) * EMOJIS_RANKING.length)];
   const num = Math.floor(seedRandom(seed + 150) * 99) + 1;
-  return `${emoji} ${animal}${adj}${num}`;
+  return `${animal}${adj}${num}`;
 }
 
 function nivelPorXp(xp: number): number {
@@ -71,51 +110,46 @@ function nivelPorXp(xp: number): number {
   return level;
 }
 
-function getFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
+/* ---------------------------------------------------------------------
+ * Cache de escolas, turmas e perfil.
+ *
+ * Estas funcoes sao SINCRONAS e chamadas de dentro do render, mas os dados
+ * agora vivem no banco. Em vez de tornar tudo assincrono (o que
+ * contaminaria varios componentes), o App hidrata este cache uma vez no
+ * login via hidratarCache(); as leituras seguem instantaneas.
+ *
+ * Enquanto o cache nao chega, valem as constantes ESCOLAS/TURMAS, que sao
+ * so a semente de demonstracao.
+ * ------------------------------------------------------------------- */
+
+let cacheEscolas: Escola[] | null = null;
+let cacheTurmas: Turma[] | null = null;
+let cachePerfil: UserProfile | null = null;
+
+export function hidratarCache(dados: { escolas?: Escola[]; turmas?: Turma[]; perfil?: UserProfile }): void {
+  if (dados.escolas) cacheEscolas = dados.escolas;
+  if (dados.turmas) cacheTurmas = dados.turmas;
+  if (dados.perfil) cachePerfil = dados.perfil;
 }
 
-function saveToStorage(key: string, data: unknown) {
-  localStorage.setItem(key, JSON.stringify(data));
+export function limparCache(): void {
+  cacheEscolas = null;
+  cacheTurmas = null;
+  cachePerfil = null;
 }
 
-/** Escolas cadastradas pelo usuário (persistidas) */
+/** Escolas disponiveis (do banco, com fallback para a semente). */
 export function getEscolasCadastradas(): Escola[] {
-  return getFromStorage<Escola[]>('mm_escolas', ESCOLAS);
+  return cacheEscolas && cacheEscolas.length > 0 ? cacheEscolas : ESCOLAS;
 }
 
 export function getTurmasCadastradas(): Turma[] {
-  return getFromStorage<Turma[]>('mm_turmas', TURMAS);
-}
-
-export function salvarEscola(escola: Escola) {
-  const list = getEscolasCadastradas();
-  if (!list.find(e => e.id === escola.id)) {
-    list.push(escola);
-    saveToStorage('mm_escolas', list);
-  }
-}
-
-export function salvarTurma(turma: Turma) {
-  const list = getTurmasCadastradas();
-  if (!list.find(t => t.id === turma.id)) {
-    list.push(turma);
-    saveToStorage('mm_turmas', list);
-  }
+  return cacheTurmas && cacheTurmas.length > 0 ? cacheTurmas : TURMAS;
 }
 
 export function getProfile(uid: string): UserProfile {
-  const defaultProfile: UserProfile = { uid, nome: 'Você', email: '' };
-  return getFromStorage<UserProfile>(`mm_profile_${uid}`, defaultProfile);
-}
-
-export function saveProfile(profile: UserProfile) {
-  saveToStorage(`mm_profile_${profile.uid}`, profile);
+  if (cachePerfil && cachePerfil.uid === uid) return cachePerfil;
+  return { uid, nome: 'Você', email: '' };
 }
 
 /** Gera dados mock de ranking para demonstração offline */
@@ -130,12 +164,12 @@ function gerarRankingMock(
   const entries: RankingEntry[] = [];
   const rng = seedFromString(userProfile.uid || 'default');
 
-  // Each entry — anonymous nicknames (LGPD compliant, like Duolingo)
+  // Each entry - anonymous nicknames (LGPD compliant, like Duolingo)
   for (let i = 0; i < ADJETIVOS.length * ANIMAIS.length; i++) {
     if (entries.length >= 48) break;
     const nickname = gerarNickname(rng + i * 7);
     const turma = turmas[i % turmas.length];
-    const escola = escolas.find(e => e.id === turma.escolaId) || escolas[0];
+    const escola = escolas.find((e) => e.id === turma.escolaId) || escolas[0];
     const xp = gerarXpMockSeed(rng + i * 3 + 1);
     const streak = gerarStreakMockSeed(rng + i * 3 + 100);
     entries.push({
@@ -157,9 +191,9 @@ function gerarRankingMock(
   const userEntry: RankingEntry = {
     posicao: 0,
     nome: userProfile.nome || 'Você',
-    turma: turmas.find(t => t.id === userProfile.turmaId)?.nome || '—',
+    turma: turmas.find((t) => t.id === userProfile.turmaId)?.nome || '-',
     turmaId: userProfile.turmaId || '',
-    escola: escolas.find(e => e.id === userProfile.escolaId)?.nome || '—',
+    escola: escolas.find((e) => e.id === userProfile.escolaId)?.nome || '-',
     escolaId: userProfile.escolaId || '',
     xp: userXp,
     level: nivelPorXp(userXp),
@@ -173,9 +207,9 @@ function gerarRankingMock(
   // Filter
   let filtered = entries;
   if (filter === 'turma' && userProfile.turmaId) {
-    filtered = entries.filter(e => e.turmaId === userProfile.turmaId);
+    filtered = entries.filter((e) => e.turmaId === userProfile.turmaId);
   } else if (filter === 'escola' && userProfile.escolaId) {
-    filtered = entries.filter(e => e.escolaId === userProfile.escolaId);
+    filtered = entries.filter((e) => e.escolaId === userProfile.escolaId);
   }
 
   // Sort by XP descending
@@ -186,6 +220,19 @@ function gerarRankingMock(
 }
 
 /** Busca dados reais do Supabase */
+/**
+ * Ranking real, vindo da view `ranking`.
+ *
+ * A versao anterior consultava `profiles` e `gamification`, tabelas do
+ * 001_schema.sql que NUNCA existiram neste banco. As duas chamadas
+ * devolviam 404, o catch engolia, e a tela caia nos dados de demonstracao
+ * sem avisar ninguem: o aluno via um ranking inventado achando que era o
+ * da turma dele.
+ *
+ * A view ja resolve dois problemas no servidor: junta perfil com
+ * gamificacao e limita o escopo a colegas de escola ou de liga, para nao
+ * expor nome e escola de estudantes menores de idade a qualquer conta.
+ */
 async function gerarRankingSupabase(
   filter: RankingFilter,
   userProfile: UserProfile,
@@ -195,57 +242,46 @@ async function gerarRankingSupabase(
   const sb = getSupabase();
   if (!sb) return [];
 
-  try {
-    const { data: profiles } = await sb
-      .from('profiles')
-      .select('uid, nome, email, escola_id, turma_id')
-      .limit(500);
+  const { data, error } = await sb
+    .from('ranking')
+    .select('id, nome, escola_id, turma_id, escola_nome, turma_nome, xp, level, streak')
+    .order('xp', { ascending: false })
+    .limit(500);
 
-    const { data: gamifications } = await sb
-      .from('gamification')
-      .select('user_uid, xp, level, streak')
-      .limit(500);
-
-    if (!profiles || !gamifications) return [];
-
-    const escolas = getEscolasCadastradas();
-    const turmas = getTurmasCadastradas();
-
-    const xpMap = new Map(gamifications.map(g => [g.user_uid, g]));
-
-    const entries: RankingEntry[] = profiles.map((p, idx) => {
-      const g = xpMap.get(p.uid);
-      const turma = turmas.find(t => t.id === p.turma_id);
-      const escola = escolas.find(e => e.id === p.escola_id);
-      const isSelf = p.uid === userProfile.uid;
-      return {
-        posicao: 0,
-        nome: isSelf ? (userProfile.nome || 'Você') : gerarNickname(seedFromString(p.uid || `${idx}`)),
-        turma: turma?.nome || '—',
-        turmaId: p.turma_id || '',
-        escola: escola?.nome || '—',
-        escolaId: p.escola_id || '',
-        xp: g?.xp || 0,
-        level: g?.level || 1,
-        streak: g?.streak || 0,
-        avatarInicial: isSelf ? (userProfile.nome?.charAt(0)?.toUpperCase() || 'V') : '',
-        destaque: isSelf,
-        variacao: 0,
-      };
-    });
-
-    let filtered = entries.filter(e => e.xp > 0);
-    if (filter === 'turma' && userProfile.turmaId) {
-      filtered = filtered.filter(e => e.turmaId === userProfile.turmaId);
-    } else if (filter === 'escola' && userProfile.escolaId) {
-      filtered = filtered.filter(e => e.escolaId === userProfile.escolaId);
-    }
-
-    filtered.sort((a, b) => b.xp - a.xp);
-    return filtered.map((e, i) => ({ ...e, posicao: i + 1 }));
-  } catch {
+  if (error) {
+    console.warn('[ranking] consulta falhou:', error.message);
     return [];
   }
+
+  const entries: RankingEntry[] = (data ?? []).map((r: any, idx: number) => {
+    const eu = r.id === userProfile.uid;
+    return {
+      posicao: 0,
+      // Apelido anonimo para os colegas: o ranking nao precisa expor o
+      // nome real de ninguem para funcionar.
+      nome: eu ? userProfile.nome || 'Você' : gerarNickname(seedFromString(r.id || `${idx}`)),
+      turma: r.turma_nome || '-',
+      turmaId: r.turma_id || '',
+      escola: r.escola_nome || '-',
+      escolaId: r.escola_id || '',
+      xp: r.xp ?? 0,
+      level: r.level ?? 1,
+      streak: r.streak ?? 0,
+      avatarInicial: eu ? userProfile.nome?.charAt(0)?.toUpperCase() || 'V' : '',
+      destaque: eu,
+      variacao: 0,
+    };
+  });
+
+  let filtrado = entries.filter((e) => e.xp > 0);
+  if (filter === 'turma' && userProfile.turmaId) {
+    filtrado = filtrado.filter((e) => e.turmaId === userProfile.turmaId);
+  } else if (filter === 'escola' && userProfile.escolaId) {
+    filtrado = filtrado.filter((e) => e.escolaId === userProfile.escolaId);
+  }
+
+  filtrado.sort((a, b) => b.xp - a.xp);
+  return filtrado.map((e, i) => ({ ...e, posicao: i + 1 }));
 }
 
 export async function getRankingData(
@@ -288,7 +324,7 @@ function seedFromString(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const c = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + c;
+    hash = (hash << 5) - hash + c;
     hash |= 0;
   }
   return Math.abs(hash);

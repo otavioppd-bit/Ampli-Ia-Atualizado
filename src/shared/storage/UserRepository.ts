@@ -1,159 +1,180 @@
-import { User, Session, UserRole } from '../types';
+import type { Session as SbSession, Subscription } from '@supabase/supabase-js';
+import { Session, User, UserRole } from '../types';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 
-const USERS_KEY = 'mm_users';
-const SESSION_KEY = 'mm_session';
+/**
+ * Autenticacao - exclusivamente Supabase Auth.
+ *
+ * A versao anterior mantinha um array `mm_users` no localStorage com as
+ * SENHAS EM TEXTO PURO e um objeto `mm_session` que o app tratava como
+ * verdade. Isso permitia duas coisas graves:
+ *
+ *   1. ler todas as senhas pelo DevTools (e elas eram reenviadas ao
+ *      Supabase, entao vazavam a conta real);
+ *   2. digitar no console
+ *        localStorage.setItem('mm_session', '{"role":"educator",...}')
+ *      e recarregar para virar educador.
+ *
+ * Agora a sessao vem do JWT e o papel vem da tabela `perfis`. Nenhum dos
+ * dois e gravavel pelo cliente: o papel e travado por trigger no banco.
+ */
+
+const SEM_SUPABASE = 'Banco de dados nao configurado. Verifique o .env.';
+
+export interface AuthResult {
+  session: Session | null;
+  error?: string;
+  /** Cadastro criado, mas exige confirmacao por e-mail antes do login. */
+  precisaConfirmarEmail?: boolean;
+  /** Papel real no banco, quando difere do que o usuario escolheu na tela. */
+  papelDivergente?: UserRole;
+}
 
 export class UserRepository {
-  getUsers(): User[] {
-    try {
-      const raw = localStorage.getItem(USERS_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
+  /** Perfil do usuario logado, ou null. */
+  private async carregarPerfil(uid: string, emailFallback: string): Promise<Session | null> {
+    const sb = getSupabase();
+    if (!sb) return null;
+
+    const { data, error } = await sb
+      .from('perfis')
+      .select('id, email, nome, papel, escola_id, turma_id')
+      .eq('id', uid)
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    return {
+      uid: data.id,
+      email: data.email ?? emailFallback,
+      nome: data.nome,
+      role: (data.papel as UserRole) ?? 'student',
+      escolaId: data.escola_id,
+      turmaId: data.turma_id,
+    };
+  }
+
+  /** Sessao atual a partir do JWT guardado pelo supabase-js. */
+  async getSession(): Promise<Session | null> {
+    if (!isSupabaseConfigured()) return null;
+    const sb = getSupabase();
+    if (!sb) return null;
+
+    const { data } = await sb.auth.getSession();
+    const user = data.session?.user;
+    if (!user) return null;
+
+    return this.carregarPerfil(user.id, user.email ?? '');
+  }
+
+  async login(email: string, senha: string, papelEscolhido?: UserRole): Promise<AuthResult> {
+    if (!isSupabaseConfigured()) return { session: null, error: SEM_SUPABASE };
+    const sb = getSupabase();
+    if (!sb) return { session: null, error: SEM_SUPABASE };
+
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
+
+    if (error) {
+      // Mensagem generica de proposito: distinguir "e-mail nao existe" de
+      // "senha errada" entrega uma lista de contas validas a quem testa.
+      const naoConfirmado = /confirm/i.test(error.message);
+      return {
+        session: null,
+        error: naoConfirmado
+          ? 'Confirme seu e-mail antes de entrar. Verifique a caixa de entrada.'
+          : 'E-mail ou senha incorretos.',
+      };
     }
+    if (!data.user) return { session: null, error: 'Falha ao autenticar.' };
+
+    const session = await this.carregarPerfil(data.user.id, data.user.email ?? email);
+    if (!session) {
+      return { session: null, error: 'Perfil nao encontrado. Fale com o suporte.' };
+    }
+
+    return {
+      session,
+      papelDivergente:
+        papelEscolhido && papelEscolhido !== session.role ? session.role : undefined,
+    };
   }
 
-  saveUsers(users: User[]): void {
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  /**
+   * Cadastro.
+   *
+   * Nao recebe papel de proposito. O papel e definido pelo trigger
+   * handle_new_user() no banco, que sempre grava 'student' - o metadata do
+   * signUp e controlado pelo cliente, e obedecer a ele deixaria qualquer
+   * pessoa se cadastrar como admin. Promocao e ato administrativo.
+   */
+  async register(email: string, senha: string, nome: string): Promise<AuthResult> {
+    if (!isSupabaseConfigured()) return { session: null, error: SEM_SUPABASE };
+    const sb = getSupabase();
+    if (!sb) return { session: null, error: SEM_SUPABASE };
+
+    const { data, error } = await sb.auth.signUp({
+      email,
+      password: senha,
+      options: { data: { nome: nome.trim() } },
+    });
+
+    if (error) {
+      const jaExiste = /already|registered|exists/i.test(error.message);
+      return {
+        session: null,
+        error: jaExiste ? 'E-mail ja cadastrado.' : error.message,
+      };
+    }
+
+    // Com confirmacao de e-mail ligada, signUp nao devolve sessao.
+    if (!data.session) {
+      return { session: null, precisaConfirmarEmail: true };
+    }
+
+    const session = await this.carregarPerfil(data.user!.id, email);
+    return { session, error: session ? undefined : 'Perfil nao criado. Tente entrar novamente.' };
   }
 
-  findByEmail(email: string): User | undefined {
-    return this.getUsers().find(u => u.email === email);
+  async logout(): Promise<void> {
+    const sb = getSupabase();
+    await sb?.auth.signOut();
   }
 
-  register(user: User): boolean {
-    const users = this.getUsers();
-    const isStudent = user.role === 'student';
-    if (isStudent && users.filter(u => u.role === 'student').length >= 40) return false;
-    if (users.find(u => u.email === user.email)) return false;
-    users.push(user);
-    this.saveUsers(users);
-    return true;
+  /** Atualiza campos livres do proprio perfil (papel e escola sao travados no banco). */
+  async updateProfile(dados: Partial<Pick<User, 'nome' | 'sobrenome' | 'metaEstudo'>>): Promise<boolean> {
+    const sb = getSupabase();
+    if (!sb) return false;
+    const { data: auth } = await sb.auth.getUser();
+    if (!auth.user) return false;
+
+    const patch: Record<string, unknown> = {};
+    if (dados.nome !== undefined) patch.nome = dados.nome;
+    if (dados.sobrenome !== undefined) patch.sobrenome = dados.sobrenome;
+    if (dados.metaEstudo !== undefined) patch.meta_estudo = dados.metaEstudo;
+    if (Object.keys(patch).length === 0) return true;
+
+    const { error } = await sb.from('perfis').update(patch).eq('id', auth.user.id);
+    return !error;
   }
 
-  login(email: string, senha: string): User | null {
-    const user = this.findByEmail(email);
-    if (!user || user.senha !== senha) return null;
-    return user;
-  }
+  /**
+   * Reage a login/logout/refresh do token - inclusive em outra aba.
+   * Devolve a funcao de cancelamento.
+   */
+  onAuthChange(cb: (session: Session | null) => void): () => void {
+    const sb = getSupabase();
+    if (!sb) return () => {};
 
-  async loginSupabase(email: string, senha: string): Promise<{ user: User | null; error?: string }> {
-    const localUser = this.login(email, senha);
-    if (localUser) {
-      const session: Session = { uid: localUser.uid, email: localUser.email, nome: localUser.nome, role: localUser.role || 'student' };
-      this.saveSession(session);
-      if (isSupabaseConfigured()) {
-        const sb = getSupabase();
-        if (sb) {
-          sb.auth.signInWithPassword({ email, password: senha }).catch(() => {});
-        }
+    const { data } = sb.auth.onAuthStateChange(async (_evt, sbSession: SbSession | null) => {
+      if (!sbSession?.user) {
+        cb(null);
+        return;
       }
-      return { user: localUser };
-    }
+      cb(await this.carregarPerfil(sbSession.user.id, sbSession.user.email ?? ''));
+    });
 
-    if (isSupabaseConfigured()) {
-      const sb = getSupabase();
-      if (sb) {
-        try {
-          const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
-          if (error) return { user: null, error: error.message };
-          if (!data.user) return { user: null, error: 'Usuário não encontrado' };
-
-          const { data: profile } = await sb.from('profiles').select('*').eq('auth_id', data.user.id).maybeSingle();
-          if (profile) {
-            const session: Session = { uid: profile.uid, email: profile.email, nome: profile.nome, role: profile.role || 'student' };
-            this.saveSession(session);
-            return { user: { uid: profile.uid, email: profile.email, nome: profile.nome, senha: '', role: profile.role || 'student' } };
-          }
-          return { user: null, error: 'Perfil não encontrado' };
-        } catch (e: any) {
-          return { user: null, error: e.message || 'Erro de conexão' };
-        }
-      }
-    }
-
-    return { user: null, error: 'E-mail ou senha incorretos' };
-  }
-
-  async registerSupabase(email: string, senha: string, nome: string, role: UserRole = 'student'): Promise<{ user: User | null; error?: string }> {
-    const localUid = `user_${Date.now()}`;
-    const registered = this.register({ uid: localUid, email, nome, senha, role });
-    if (!registered) {
-      const users = this.getUsers();
-      const isStudent = role === 'student';
-      return { user: null, error: isStudent && users.filter(u => u.role === 'student').length >= 40 ? 'Turma cheia. Limite de 40 alunos.' : 'E-mail já cadastrado' };
-    }
-
-    const session: Session = { uid: localUid, email, nome, role };
-    this.saveSession(session);
-
-    if (isSupabaseConfigured()) {
-      const sb = getSupabase();
-      if (sb) {
-        try {
-          const { data, error } = await sb.auth.signUp({
-            email,
-            password: senha,
-            options: { data: { nome, role } },
-          });
-          if (!error && data?.user) {
-            const supabaseUid = `user_${data.user.id}`;
-            await sb.from('profiles').insert({
-              uid: supabaseUid,
-              email,
-              nome,
-              role,
-              auth_id: data.user.id,
-            });
-            const supabaseSession: Session = { uid: supabaseUid, email, nome, role };
-            this.saveSession(supabaseSession);
-            return { user: { uid: supabaseUid, email, nome, senha, role } };
-          }
-          if (error) {
-            console.warn('Supabase signup skipped (rate limit or network):', error.message);
-          }
-        } catch (e) {
-          console.warn('Supabase signup error (non-blocking):', e);
-        }
-      }
-    }
-
-    return { user: { uid: localUid, email, nome, senha, role } };
-  }
-
-  async logoutSupabase(): Promise<void> {
-    if (isSupabaseConfigured()) {
-      const sb = getSupabase();
-      await sb?.auth.signOut();
-    }
-    this.clearSession();
-  }
-
-  updateProfile(uid: string, data: Partial<User>): void {
-    const users = this.getUsers();
-    const idx = users.findIndex(u => u.uid === uid);
-    if (idx !== -1) {
-      users[idx] = { ...users[idx], ...data };
-      this.saveUsers(users);
-    }
-  }
-
-  saveSession(session: Session): void {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  }
-
-  getSession(): Session | null {
-    try {
-      const raw = localStorage.getItem(SESSION_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  }
-
-  clearSession(): void {
-    localStorage.removeItem(SESSION_KEY);
+    const sub: Subscription | undefined = data?.subscription;
+    return () => sub?.unsubscribe();
   }
 }
 

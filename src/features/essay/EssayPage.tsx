@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { BookMarked, Lightbulb, PenLine, Trophy } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { GlassCard } from '../../shared/ui/GlassCard';
+import { EmptyState } from '../../shared/ui/EmptyState';
+import { m, useReducedMotion } from 'motion/react';
+import { atrasoDoItem } from '../../shared/lib/motionPresets';
 import { Modal } from '../../shared/ui/Modal';
 import { correctEssay, correctEssayAI } from '../../shared/lib/essayCorrector';
 import { aiAvailable } from '../../shared/lib/aiService';
@@ -36,19 +40,19 @@ function getNotaColor(nota: number): string {
 }
 
 function getNotaLabel(nota: number): string {
-  if (nota >= 900) return 'Excelente — nota dos sonhos!';
+  if (nota >= 900) return 'Excelente - nota dos sonhos!';
   if (nota >= 700) return 'Excelente';
-  if (nota >= 600) return 'Bom — próximo do ideal';
-  if (nota >= 400) return 'Razoável — continue praticando';
-  return 'Precisa de atenção — estude os critérios';
+  if (nota >= 600) return 'Bom - próximo do ideal';
+  if (nota >= 400) return 'Razoável - continue praticando';
+  return 'Precisa de atenção - estude os critérios';
 }
 
 const competencias = [
-  { key: 'competencia1' as const, label: 'C1 — Norma Culta', short: 'C1' },
-  { key: 'competencia2' as const, label: 'C2 — Compreensão do Tema', short: 'C2' },
-  { key: 'competencia3' as const, label: 'C3 — Argumentação', short: 'C3' },
-  { key: 'competencia4' as const, label: 'C4 — Coesão', short: 'C4' },
-  { key: 'competencia5' as const, label: 'C5 — Proposta de Intervenção', short: 'C5' },
+  { key: 'competencia1' as const, label: 'C1 - Norma Culta', short: 'C1' },
+  { key: 'competencia2' as const, label: 'C2 - Compreensão do Tema', short: 'C2' },
+  { key: 'competencia3' as const, label: 'C3 - Argumentação', short: 'C3' },
+  { key: 'competencia4' as const, label: 'C4 - Coesão', short: 'C4' },
+  { key: 'competencia5' as const, label: 'C5 - Proposta de Intervenção', short: 'C5' },
 ];
 
 function ScoreRing({ nota, size = 150 }: { nota: number; size?: number }) {
@@ -81,6 +85,7 @@ function ScoreRing({ nota, size = 150 }: { nota: number; size?: number }) {
 }
 
 export function EssayPage() {
+  const reduzir = useReducedMotion();
   const [text, setText] = useState('');
   const [tema, setTema] = useState('');
   const [isCorrecting, setIsCorrecting] = useState(false);
@@ -261,7 +266,7 @@ export function EssayPage() {
         </div>
         {challengeResults.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="badge badge-purple">🏆 {challengeResults.length} desafios</span>
+            <span className="badge badge-purple"><Trophy size={16} className="inline-block align-[-0.15em] text-amber-400" /> {challengeResults.length} desafios</span>
             <span className="badge badge-emerald">Nota média: {Math.round(challengeResults.reduce((a, r) => a + r.notaFinal, 0) / challengeResults.length)}</span>
           </div>
         )}
@@ -298,8 +303,7 @@ export function EssayPage() {
             onClick={startChallenge}
             className="btn-secondary shrink-0"
             title="Entre no Modo Desafio: tema aleatório, coletânea de apoio e 3 horas para escrever como no ENEM"
-          >
-            ⚡ Modo Desafio
+          > Modo Desafio
           </button>
           <button onClick={handleCorrect} disabled={text.trim().length < 50 || isCorrecting} className="btn-primary">
             {isCorrecting ? (
@@ -380,17 +384,34 @@ export function EssayPage() {
       )}
 
       {/* ==== Histórico de desafios ==== */}
+      {challengeResults.length === 0 && (
+        <div className="glass rounded-2xl p-5">
+          <EmptyState
+            pose="estudando"
+            compacto
+            titulo="Você ainda não fez nenhum desafio"
+            descricao="Escreva a primeira redação cronometrada e veja a nota por competência."
+          />
+        </div>
+      )}
+
       {challengeResults.length > 0 && (
         <GlassCard>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-300">🏆 Histórico de Desafios</h2>
+            <h2 className="text-sm font-semibold text-gray-300"><Trophy size={16} className="inline-block align-[-0.15em] text-amber-400" /> Histórico de Desafios</h2>
             <span className="badge badge-gray">{challengeResults.length} rodadas</span>
           </div>
           <div className="space-y-3">
-            {challengeResults.map(r => {
+            {challengeResults.map((r, i) => {
               const color = getNotaColor(r.notaFinal);
               return (
-                <div key={r.id} className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                <m.div
+                  key={r.id}
+                  initial={reduzir ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={reduzir ? { duration: 0 } : { delay: atrasoDoItem(i), duration: 0.25 }}
+                  className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5"
+                >
                   <div className="relative w-12 h-12 shrink-0">
                     <svg className="w-12 h-12 -rotate-90" viewBox="0 0 120 120">
                       <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10" />
@@ -409,26 +430,25 @@ export function EssayPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-200 truncate">{r.tema}</p>
                     <p className="text-[11px] text-gray-500">
-                      {r.finalizado ? '✓ Finalizada no prazo' : '⏱ Tempo esgotado'} ·{' '}
+                      {r.finalizado ? ' Finalizada no prazo' : '⏱ Tempo esgotado'} ·{' '}
                       {Math.floor(r.tempoUsadoSegundos / 60)}min · {new Date(r.timestamp).toLocaleDateString('pt-BR')} · +{r.xpGanho} XP
                     </p>
                   </div>
                   <div className="flex gap-1 flex-wrap shrink-0">
                     {['competencia1','competencia2','competencia3','competencia4','competencia5'].map((c, i) => (
-                      <span key={c} className="px-1.5 py-0.5 rounded bg-white/5 text-[9px] text-gray-400">
-                        C{i + 1}:{r[c as keyof ChallengeResult]}
+                      <span key={c} className="px-1.5 py-0.5 rounded bg-white/5 text-[9px] text-gray-400"> C{i + 1}:{r[c as keyof ChallengeResult]}
                       </span>
                     ))}
                   </div>
-                </div>
+                </m.div>
               );
             })}
           </div>
         </GlassCard>
       )}
 
-      {/* ==== MODO DESAFIO — experiência de prova ENEM ==== */}
-      <Modal open={challengeOpen} fullScreen title="🎯 Modo Desafio">
+      {/* ==== MODO DESAFIO - experiência de prova ENEM ==== */}
+      <Modal open={challengeOpen} fullScreen title=" Modo Desafio">
         {theme && (
           <div className="flex flex-col min-h-full challenge-hero overflow-y-auto overflow-x-hidden scrollbar-none">
             {/* Top bar */}
@@ -437,8 +457,7 @@ export function EssayPage() {
                 onClick={() => setConfirmExit(true)}
                 className="btn-ghost shrink-0 -ml-2"
                 title="Voltar (caso tenha aberto sem querer)"
-              >
-                ← Voltar
+              > Voltar
               </button>
               <div className="flex items-center gap-2">
                 <span className="badge badge-emerald">🇧🇷 Prova simulada ENEM</span>
@@ -448,8 +467,7 @@ export function EssayPage() {
                 onClick={newRandomTheme}
                 className="btn-secondary shrink-0"
                 title="Sortear outro tema (o cronômetro é reiniciado)"
-              >
-                🎲 Outro Tema
+              > Outro Tema
               </button>
             </div>
 
@@ -457,8 +475,7 @@ export function EssayPage() {
             <div className="relative z-10 rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-6 mb-5 overflow-hidden">
               <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5 items-center">
                 <div>
-                  <span className="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-2 inline-block">
-                    Proposta de Redação
+                  <span className="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-2 inline-block"> Proposta de Redação
                   </span>
                   <h2 className="text-xl md:text-2xl font-extrabold text-white leading-snug challenge-q">
                     {theme.tema}
@@ -499,7 +516,7 @@ export function EssayPage() {
               </div>
 
               {/* Stats */}
-              <div className="mt-5 grid grid-cols-3 gap-3">
+              <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="challenge-stat px-3 py-2.5">
                   <div className="text-[10px] uppercase tracking-wider text-white/50 mb-0.5">Extensão ideal</div>
                   <div className="text-base font-bold text-white">300+ palavras</div>
@@ -517,8 +534,7 @@ export function EssayPage() {
 
             {/* Coletânea */}
             <div className="mb-5">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5 flex items-center gap-2">
-                📚 Textos de Apoio (coletânea) — repertório sociocultural
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5 flex items-center gap-2"> Textos de Apoio (coletânea) - repertório sociocultural
                 <span className="badge badge-gray text-[9px] uppercase">use como base para seus argumentos</span>
               </h3>
               <div className="space-y-2.5">
@@ -526,8 +542,7 @@ export function EssayPage() {
                   <div key={i} className="rounded-2xl bg-white/[0.03] border border-white/5 p-4 pl-5 relative overflow-hidden">
                     <span className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-400/60 to-amber-400/40" />
                     <p className="text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-2">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-amber-500/15 text-amber-300 text-[10px] font-bold">
-                        T{i + 1}
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-amber-500/15 text-amber-300 text-[10px] font-bold"> T{i + 1}
                       </span>
                       {t.titulo}
                     </p>
@@ -536,16 +551,16 @@ export function EssayPage() {
                 ))}
               </div>
               <div className="mt-3 challenge-note rounded-2xl bg-amber-500/[0.06] border border-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
-                <span className="mr-1">💡</span>
+                <span className="mr-1"><Lightbulb size={16} className="inline-block align-[-0.15em] text-amber-400" /></span>
                 <span className="font-semibold text-amber-300">Dica:</span> {theme.dica}
               </div>
             </div>
 
-            {/* Editor — folha de redação */}
+            {/* Editor - folha de redação */}
             <div className="flex-1 min-h-0 flex flex-col">
               <div className="flex items-center justify-between gap-3 mb-2.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-white uppercase tracking-wider">✍️ Sua Redação</span>
+                  <span className="text-xs font-semibold text-white uppercase tracking-wider"> Sua Redação</span>
                   <span className="badge badge-gray">folha oficial</span>
                 </div>
                 <span className={`badge ${challengeWordCount >= 150 ? 'badge-emerald' : 'badge-red'}`}>
@@ -579,7 +594,7 @@ export function EssayPage() {
                 <p className="text-[10px] text-white/40 mt-1">
                   {challengeWordCount < 150
                     ? `Faltam ${150 - challengeWordCount} palavras para o mínimo exigido pelo ENEM.`
-                    : '✓ Mínimo do ENEM atingido! Continue para alcançar uma boa nota.'}
+                    : ' Mínimo do ENEM atingido! Continue para alcançar uma boa nota.'}
                 </p>
               </div>
             </div>
@@ -588,8 +603,7 @@ export function EssayPage() {
             {challengeSubmitted ? (
               challengeIsCorrecting ? (
                 <div className="flex items-center justify-center gap-2 py-5 text-sm text-gray-400">
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Corrigindo redação como no ENEM...
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Corrigindo redação como no ENEM...
                 </div>
               ) : challengeCorrection ? (
                 <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
@@ -623,8 +637,7 @@ export function EssayPage() {
                       ))}
                     </ul>
                   )}
-                  <button onClick={() => { exitChallenge(); startChallenge(); }} className="btn-primary w-full">
-                    🎲 Novo Desafio
+                  <button onClick={() => { exitChallenge(); startChallenge(); }} className="btn-primary w-full"> Novo Desafio
                   </button>
                 </div>
               ) : (
@@ -633,23 +646,20 @@ export function EssayPage() {
                     ⏱ <span className="text-white font-semibold">Tempo esgotado.</span>{' '}
                     {challengeWordCount >= 50 ? 'Sua redação foi corrigida.' : 'Você não escreveu uma redação com pelo menos 50 palavras a tempo.'}
                   </p>
-                  <button onClick={() => { exitChallenge(); startChallenge(); }} className="btn-primary w-full">
-                    🎲 Novo Desafio
+                  <button onClick={() => { exitChallenge(); startChallenge(); }} className="btn-primary w-full"> Novo Desafio
                   </button>
                 </div>
               )
             ) : (
               <div className="flex items-center justify-between gap-3 py-4 mt-2 border-t border-white/5">
                 <span className="text-xs text-gray-600 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full status-dot-active" />
-                  Enviado automaticamente ao fim do tempo.
+                  <span className="w-1.5 h-1.5 rounded-full status-dot-active" /> Enviado automaticamente ao fim do tempo.
                 </span>
                 <button
                   onClick={handleChallengeSubmit}
                   disabled={challengeText.trim().length < 50}
                   className="btn-primary shrink-0"
-                >
-                  🚀 Enviar e Corrigir
+                > Enviar e Corrigir
                 </button>
               </div>
             )}
@@ -659,33 +669,29 @@ export function EssayPage() {
 
       {/* Confirm exit (for accidental press) */}
       <Modal open={confirmExit} title="Sair do desafio?">
-        <p className="text-sm text-gray-300 mb-5">
-          Se você sair agora, a redação em andamento será <span className="text-white font-semibold">perdida</span> e o cronômetro reiniciado.
+        <p className="text-sm text-gray-300 mb-5"> Se você sair agora, a redação em andamento será <span className="text-white font-semibold">perdida</span> e o cronômetro reiniciado.
           Tem certeza de que deseja voltar?
         </p>
         <div className="flex gap-3 justify-end">
-          <button onClick={() => setConfirmExit(false)} className="btn-secondary">
-            Continuar escrevendo
+          <button onClick={() => setConfirmExit(false)} className="btn-secondary"> Continuar escrevendo
           </button>
-          <button onClick={exitChallenge} className="btn-danger">
-            Sair do desafio
+          <button onClick={exitChallenge} className="btn-danger"> Sair do desafio
           </button>
         </div>
       </Modal>
 
       {/* ==== Tutorial / onboarding ==== */}
-      <Modal open={showTutorial} title="⚡ Como funciona o Modo Desafio">
+      <Modal open={showTutorial} title=" Como funciona o Modo Desafio">
         <div className="space-y-4">
           <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5">
-            <p className="text-sm text-gray-300">
-              Simule o dia da prova do ENEM. Você recebe um <span className="text-white font-semibold">tema aleatório</span>,
+            <p className="text-sm text-gray-300"> Simule o dia da prova do ENEM. Você recebe um <span className="text-white font-semibold">tema aleatório</span>,
               um <span className="text-white font-semibold">repertório de apoio</span> e tem{' '}
               <span className="text-white font-semibold">3 horas</span> para escrever sua dissertação-argumentativa.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5">
-              <div className="text-xl mb-1">🎲</div>
+              <div className="text-xl mb-1"></div>
               <h3 className="text-xs font-semibold text-gray-300 mb-1">Tema surpresa</h3>
               <p className="text-xs text-gray-500">Sorteado sempre de forma aleatória, como na prova real.</p>
             </div>
@@ -695,12 +701,12 @@ export function EssayPage() {
               <p className="text-xs text-gray-500">Cronômetro regressivo. Envio automático ao fim do tempo.</p>
             </div>
             <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5">
-              <div className="text-xl mb-1">📚</div>
+              <div className="text-xl mb-1"><BookMarked size={16} className="inline-block align-[-0.15em] text-amber-400" /></div>
               <h3 className="text-xs font-semibold text-gray-300 mb-1">Repertório de apoio</h3>
-              <p className="text-xs text-gray-500">Use a coletânea para embasar os seus argumentos — sua nota valoriza isso.</p>
+              <p className="text-xs text-gray-500">Use a coletânea para embasar os seus argumentos - sua nota valoriza isso.</p>
             </div>
             <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5">
-              <div className="text-xl mb-1">📝</div>
+              <div className="text-xl mb-1"><PenLine size={16} className="inline-block align-[-0.15em] text-amber-400" /></div>
               <h3 className="text-xs font-semibold text-gray-300 mb-1">5 competências</h3>
               <p className="text-xs text-gray-500">Correção avalia norma culta, tema, argumentação, coesão e intervenção.</p>
             </div>
@@ -710,11 +716,9 @@ export function EssayPage() {
           </div>
         </div>
         <div className="flex gap-3 justify-end mt-5">
-          <button onClick={() => { setShowTutorial(false); }} className="btn-ghost">
-            Talvez depois
+          <button onClick={() => { setShowTutorial(false); }} className="btn-ghost"> Talvez depois
           </button>
-          <button onClick={finishTutorial} className="btn-primary">
-            Entendi, começar →
+          <button onClick={finishTutorial} className="btn-primary"> Entendi, começar 
           </button>
         </div>
       </Modal>

@@ -1,16 +1,21 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence, m, useReducedMotion } from 'motion/react';
+import { atrasoDoItem, avancar, springTap } from '../../shared/lib/motionPresets';
+import { BarraProgresso } from '../../shared/ui/AnimatedNumber';
+import { BarChart3, BookOpen, Target, TriangleAlert } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
-import { QuizQuestion, QuizResult } from '../../shared/types';
+import { Dificuldade, QuizQuestion, QuizResult } from '../../shared/types';
 import { generateQuizQuestions, aiAvailable } from '../../shared/lib/aiService';
 import { playCorrect, playError, playLevelUp } from '../../shared/lib/sfx';
 import { mascotStore } from '../../stores/mascotStore';
 import { XpMilestone } from '../../shared/ui/XpMilestone';
+import { useBemEstarStore } from '../../stores/bemEstarStore';
 
 type Stage = 'select' | 'topics' | 'playing' | 'result';
 
 const MAT_ICONS: Record<string, string> = {
-  Matemática: '📐', Português: '📝', Biologia: '🧬', Física: '⚡', Química: '🧪',
-  História: '📜', Geografia: '🌍', Filosofia: '🤔', Inglês: '🇬🇧', Redação: '✍️',
+  Matemática: '', Português: '', Biologia: '', Física: '', Química: '',
+  História: '', Geografia: '', Filosofia: '', Inglês: '🇬🇧', Redação: '',
 };
 
 const MATERIAS = ['Matemática', 'Português', 'Biologia', 'Física', 'Química', 'História', 'Geografia', 'Filosofia', 'Inglês', 'Redação'];
@@ -38,6 +43,7 @@ function parseQuestions(text: string): QuizQuestion[] {
       const alternativas: string[] = [];
       let correta = -1;
       let explicacao = '';
+      let dificuldade: Dificuldade = 'media';
       for (const line of lines.slice(1)) {
         const trimmed = line.trim();
         if (/^[a-eA-E][.)]/.test(trimmed)) {
@@ -49,6 +55,13 @@ function parseQuestions(text: string): QuizQuestion[] {
         } else if (trimmed.toLowerCase().startsWith('resposta') || trimmed.toLowerCase().startsWith('correta')) {
           const match = trimmed.match(/[a-eA-E]/);
           if (match) correta = match[0].toUpperCase().charCodeAt(0) - 65;
+        } else if (trimmed.toLowerCase().startsWith('dificuldade')) {
+          // Alimenta a telemetria de fadiga: "tempo demais numa questao
+          // facil" so faz sentido se soubermos que ela era facil.
+          const valor = trimmed.toLowerCase();
+          dificuldade = valor.includes('facil') || valor.includes('fácil')
+            ? 'facil'
+            : valor.includes('dific') ? 'dificil' : 'media';
         } else if (trimmed.toLowerCase().startsWith('explica') || trimmed.toLowerCase().startsWith('justificativa')) {
           explicacao = trimmed.replace(/^(explica|justificativa)[^:]*:/i, '').trim();
         }
@@ -61,6 +74,7 @@ function parseQuestions(text: string): QuizQuestion[] {
           alternativas: alternativas.slice(0, 5),
           correta: correta < alternativas.length ? correta : 0,
           explicacao: explicacao || 'Questão gerada por IA.',
+          dificuldade,
         });
       }
     } catch { /* skip malformed */ }
@@ -69,6 +83,7 @@ function parseQuestions(text: string): QuizQuestion[] {
 }
 
 export function QuizPage() {
+  const reduzir = useReducedMotion();
   const { addXP, addLog, isMuted, quizResults, addQuizResult, apiKey, setToast } = useAppStore();
   const [stage, setStage] = useState<Stage>('select');
   const [materia, setMateria] = useState('');
@@ -76,11 +91,23 @@ export function QuizPage() {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAlt, setSelectedAlt] = useState<number | null>(null);
+  /** Acertos seguidos: alimenta a comemoracao do sagui. */
+  const [sequencia, setSequencia] = useState(0);
+  const [comemorando, setComemorando] = useState(false);
+  /** Dispara o shake da alternativa errada. */
+  const [errou, setErrou] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
   const [acertos, setAcertos] = useState(0);
   const [result, setResult] = useState<QuizResult | null>(null);
   const [generating, setGenerating] = useState(false);
   const [showMilestone, setShowMilestone] = useState(false);
+
+  const { registrarResposta, descarregarTelemetria, agendarRevisao, conteudoDensoBloqueado } =
+    useBemEstarStore();
+  /** Instante em que a questao atual apareceu: base do tempo por questao. */
+  const inicioQuestao = useRef(Date.now());
+  /** Topico aberto pelo calendario adaptativo, se veio de la. */
+  const revisaoAtiva = useRef<{ topicoId: string; topicoNome: string; materia: string } | null>(null);
 
   const flashcardQuiz = (window as any).__flashcardQuiz as QuizQuestion[] | undefined;
   if (flashcardQuiz && stage === 'select') {
@@ -89,8 +116,31 @@ export function QuizPage() {
     setTimeout(() => { setMateria('Flashcards'); setQuestions(fq); setStage('playing'); }, 0);
   }
 
-  const startQuiz = useCallback(async () => {
-    if (!materia || selectedTopics.length === 0) return;
+  /**
+   * Gera e inicia o quiz.
+   *
+   * Aceita parametros porque duas entradas nao passam pela tela de
+   * selecao: a intervencao de doomscrolling (3 questoes da materia
+   * sugerida) e o calendario de revisoes (o topico que vence hoje).
+   * Sem isso, ambas teriam de escrever no estado e esperar o proximo
+   * render para chamar esta funcao.
+   */
+  const startQuiz = useCallback(async (opcoes?: { materia?: string; topicos?: string[]; quantidade?: number }) => {
+    const mat = opcoes?.materia ?? materia;
+    const topicos = opcoes?.topicos ?? selectedTopics;
+    if (!mat || topicos.length === 0) return;
+
+    /*
+     * Bloqueio de conteudo denso: com o modelo apontando fadiga, um
+     * bloco de 10 questoes vira mais uma tarefa impossivel. O quiz nao
+     * desaparece - ele encolhe para 3.
+     */
+    const quantidade = opcoes?.quantidade ?? (conteudoDensoBloqueado ? 3 : 10);
+    if (!opcoes?.quantidade && conteudoDensoBloqueado) {
+      setToast('Hoje o bloco vem menor: 3 questoes em vez de 10. Seu indice de fadiga esta alto.', 'info');
+    }
+
+    setMateria(mat);
     setGenerating(true);
     mascotStore.getState().setState('loading', 'Gerando suas questões com a IA');
     try {
@@ -100,16 +150,14 @@ export function QuizPage() {
         mascotStore.getState().setState('error', 'Preciso da sua chave da IA no Perfil para criar as questões!');
         return;
       }
-      const topicPrompt = selectedTopics.includes('Geral')
-        ? 'Geral'
-        : selectedTopics.join(', ');
-      const raw = await generateQuizQuestions(materia, topicPrompt, apiKey, 10);
+      const topicPrompt = topicos.includes('Geral') ? 'Geral' : topicos.join(', ');
+      const raw = await generateQuizQuestions(mat, topicPrompt, apiKey, quantidade);
       const parsed = parseQuestions(raw);
       if (parsed.length > 0) {
-        setQuestions(parsed.map(q => ({ ...q, materia })));
+        setQuestions(parsed.map(q => ({ ...q, materia: mat })));
         setCurrentIndex(0); setSelectedAlt(null); setShowExplanation(false); setAcertos(0); setResult(null);
         setStage('playing');
-        mascotStore.getState().setState('idle', 'Respira fundo e leia a questão com calma. 📖');
+        mascotStore.getState().setState('idle', 'Respira fundo e leia a questão com calma. ');
       } else {
         setToast('Não foi possível gerar questões. Tente outros tópicos.', 'error');
         setStage('topics');
@@ -121,11 +169,46 @@ export function QuizPage() {
       mascotStore.getState().setState('error', 'Ops! Algo deu errado ao gerar as questões.');
     }
     setGenerating(false);
-  }, [materia, selectedTopics, apiKey, setToast]);
+  }, [materia, selectedTopics, apiKey, setToast, conteudoDensoBloqueado]);
+
+  /*
+   * Entradas que nao passam pela tela de selecao.
+   *
+   * __intervencaoQuiz: veio do card de doomscrolling ("3 questoes e
+   * parar por hoje"). __revisaoAtiva: veio do calendario adaptativo, e
+   * neste caso o resultado reagenda o topico no fim.
+   */
+  useEffect(() => {
+    const janela = window as any;
+
+    const intervencao = janela.__intervencaoQuiz as { materia: string; quantidade: number } | undefined;
+    if (intervencao && stage === 'select') {
+      janela.__intervencaoQuiz = undefined;
+      void startQuiz({ materia: intervencao.materia, topicos: ['Geral'], quantidade: intervencao.quantidade });
+      return;
+    }
+
+    const revisao = janela.__revisaoAtiva as
+      | { topicoId: string; topicoNome: string; materia: string }
+      | undefined;
+    if (revisao && stage === 'select') {
+      janela.__revisaoAtiva = undefined;
+      revisaoAtiva.current = revisao;
+      void startQuiz({
+        materia: revisao.materia || 'Biologia',
+        topicos: [revisao.topicoNome],
+        quantidade: 5,
+      });
+    }
+  }, [stage, startQuiz]);
+
+  // Cronometro por questao: reinicia a cada nova questao exibida.
+  useEffect(() => {
+    inicioQuestao.current = Date.now();
+  }, [currentIndex, stage]);
 
   function toggleTopic(topic: string) {
-    setSelectedTopics(prev =>
-      prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
+    setSelectedTopics(prev => prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
     );
   }
 
@@ -133,13 +216,44 @@ export function QuizPage() {
     if (selectedAlt !== null) return;
     setSelectedAlt(idx);
     setShowExplanation(true);
-    if (idx === questions[currentIndex].correta) {
+    const questao = questions[currentIndex];
+    const acertou = idx === questao.correta;
+
+    /*
+     * Telemetria silenciosa (StudyTelemetry).
+     *
+     * Fica em memoria e vai ao banco em lotes de 10 - 90 inserts num
+     * simulado deixariam a tela travada em 4G. O modelo de fadiga le
+     * este buffer na hora, entao o indice reage dentro da propria
+     * sessao.
+     */
+    registrarResposta({
+      questionId: questao.id,
+      materia: questao.materia || materia,
+      dificuldade: questao.dificuldade ?? 'media',
+      tempoGastoSegundos: Math.min(900, Math.round((Date.now() - inicioQuestao.current) / 1000)),
+      acertou,
+    });
+
+    if (acertou) {
       setAcertos(p => p + 1);
+      const nova = sequencia + 1;
+      setSequencia(nova);
+      // A partir de 3 seguidos o sagui entra pulando no canto: a
+      // recompensa cresce junto com o desempenho, em vez de ser sempre
+      // igual.
+      if (nova >= 3) {
+        setComemorando(true);
+        window.setTimeout(() => setComemorando(false), 1000);
+      }
       if (!isMuted) playCorrect();
-      mascotStore.getState().setState('success', 'Mandou bem! 🎉 Resposta certa!');
+      mascotStore.getState().setState('success', 'Mandou bem! Resposta certa.');
     } else {
+      setSequencia(0);
+      setErrou(true);
+      window.setTimeout(() => setErrou(false), 450);
       if (!isMuted) playError();
-      mascotStore.getState().setState('error', 'Quase! Dá uma olhada na explicação e tenta de novo! 💪');
+      mascotStore.getState().setState('error', 'Quase. Olha a explicação e tenta a próxima.');
     }
   }
 
@@ -155,16 +269,37 @@ export function QuizPage() {
     setResult(res); addQuizResult(res); addXP(xpGanho);
     addLog({ timestamp: Date.now(), type: 'quiz', description: `Quiz de ${materia}: ${acertos}/${questions.length}`, xp: xpGanho });
     if (!isMuted && xpGanho > 0) playLevelUp();
-    mascotStore.getState().setState('success', `🎉 Quiz concluído! +${xpGanho} XP de bônus — meta cumprida!`);
+    mascotStore.getState().setState('success', ` Quiz concluído! +${xpGanho} XP de bônus - meta cumprida!`);
     setStage('result');
     if (xpGanho > 0) setShowMilestone(true);
+
+    /*
+     * Calendario adaptativo: a nota deste quiz define quando o topico
+     * volta (1, 3, 7, 21... dias). O aluno nao monta cronograma - ele
+     * responde, e a data e calculada.
+     */
+    const nota = questions.length ? Math.round((acertos / questions.length) * 100) : 0;
+    const emRevisao = revisaoAtiva.current;
+    if (emRevisao) {
+      revisaoAtiva.current = null;
+      void agendarRevisao(emRevisao.topicoId, emRevisao.topicoNome, emRevisao.materia || materia, nota);
+    } else {
+      const topicos = selectedTopics.filter((t) => t !== 'Geral');
+      const alvos = topicos.length > 0 ? topicos : [materia];
+      for (const topico of alvos) {
+        void agendarRevisao(`${materia}:${topico}`.toLowerCase(), topico, materia, nota);
+      }
+    }
+
+    // Fecha o lote de telemetria e recalcula o indice de fadiga.
+    void descarregarTelemetria();
   }
 
   if (stage === 'select') {
     return (
       <div className="space-y-5 animate-fade-up">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-600/10 flex items-center justify-center text-lg">🎯</div>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-600/10 flex items-center justify-center text-lg"><Target size={16} className="inline-block align-[-0.15em] text-emerald-400" /></div>
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-white">Quiz Adaptativo IA</h1>
             <p className="text-sm text-gray-500 mt-0.5">Escolha uma matéria para praticar</p>
@@ -178,7 +313,7 @@ export function QuizPage() {
               onClick={() => { setMateria(m); setSelectedTopics([]); setStage('topics'); }}
               className="glass rounded-2xl p-5 text-center hover:border-amber-500/20 hover:shadow-[0_8px_32px_rgba(245,158,11,0.08)] transition-all group border border-white/5"
             >
-              <span className="text-3xl block mb-3 group-hover:scale-110 transition-transform">{MAT_ICONS[m] || '📚'}</span>
+              <span className="text-3xl block mb-3 group-hover:scale-110 transition-transform">{MAT_ICONS[m] || ''}</span>
               <p className="text-sm font-semibold text-white">{m}</p>
               <p className="text-xs text-gray-500 mt-1">10 questões</p>
             </button>
@@ -188,7 +323,7 @@ export function QuizPage() {
         {!aiAvailable(apiKey) && (
           <div className="glass rounded-2xl p-4 border border-amber-500/10 bg-amber-500/5">
             <p className="text-sm text-amber-400 flex items-center gap-2">
-              <span>⚠️</span>
+              <span><TriangleAlert size={16} className="inline-block align-[-0.15em] text-amber-400" /></span>
               <span>Configure sua chave da API Gemini no <button onClick={() => useAppStore.getState().setActiveTab('profile')} className="underline font-medium">Perfil</button> para gerar quizzes personalizados.</span>
             </p>
           </div>
@@ -196,14 +331,14 @@ export function QuizPage() {
 
         {quizResults.length > 0 && (
           <div className="glass rounded-2xl p-5">
-            <h2 className="text-sm font-semibold text-gray-300 mb-3">📊 Histórico recente</h2>
+            <h2 className="text-sm font-semibold text-gray-300 mb-3"><BarChart3 size={16} className="inline-block align-[-0.15em] text-cyan-400" /> Histórico recente</h2>
             <div className="space-y-1">
               {quizResults.slice(-5).reverse().map((r, i) => {
                 const pct = Math.round((r.acertos / r.total) * 100);
                 return (
                   <div key={i} className="flex items-center justify-between text-sm py-2.5 px-3 rounded-xl hover:bg-white/[0.02] transition-all">
                     <div className="flex items-center gap-2">
-                      <span>{MAT_ICONS[r.materia] || '📚'}</span>
+                      <span>{MAT_ICONS[r.materia] || ''}</span>
                       <span className="text-gray-400">{r.materia}</span>
                     </div>
                     <div className="flex items-center gap-3">
@@ -231,14 +366,14 @@ export function QuizPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ backgroundColor: '#f59e0b15' }}>
-              {MAT_ICONS[materia] || '📚'}
+              {MAT_ICONS[materia] || ''}
             </div>
             <div>
               <h1 className="text-xl font-bold text-white">{materia}</h1>
               <p className="text-sm text-gray-500">Selecione os tópicos para estudar</p>
             </div>
           </div>
-          <button onClick={() => setStage('select')} className="btn-ghost text-xs">← Voltar</button>
+          <button onClick={() => setStage('select')} className="btn-ghost text-xs"> Voltar</button>
         </div>
 
         <div className="glass rounded-2xl p-6 space-y-4">
@@ -252,8 +387,7 @@ export function QuizPage() {
                   ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                   : 'bg-white/[0.03] border-white/5 text-gray-400 hover:border-white/10 hover:text-gray-200'
               }`}
-            >
-              📚 Geral (todos os tópicos)
+            > Geral (todos os tópicos)
             </button>
             {topics.map(topic => (
               <button
@@ -278,7 +412,7 @@ export function QuizPage() {
           )}
 
           <div className="flex gap-2 pt-2">
-            <button onClick={startQuiz} disabled={selectedTopics.length === 0 || generating} className="btn-primary flex-1">
+            <button onClick={() => startQuiz()} disabled={selectedTopics.length === 0 || generating} className="btn-primary flex-1">
               {generating ? (
                 <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" /> Gerando questões...</>
               ) : 'Gerar Quiz'}
@@ -345,14 +479,14 @@ export function QuizPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ backgroundColor: '#f59e0b15' }}>
-            {MAT_ICONS[materia] || '📚'}
+            {MAT_ICONS[materia] || ''}
           </div>
           <div>
             <h1 className="text-lg font-bold text-white">{materia}</h1>
             <p className="text-xs text-gray-500">Questão {currentIndex + 1} de {questions.length}</p>
           </div>
         </div>
-        <div className="flex gap-1.5">
+        <div className="hidden sm:flex gap-1.5">
           {questions.map((_, i) => (
             <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${
               i === currentIndex ? 'bg-amber-400 w-6'
@@ -362,7 +496,34 @@ export function QuizPage() {
         </div>
       </div>
 
-      <div className="glass rounded-2xl p-6">
+      {/* Barra da sessao: enche a cada questao. Saber quanto falta e o que
+          sustenta o aluno ate o fim do bloco. */}
+      <BarraProgresso
+        altura="h-2"
+        valor={((currentIndex + (selectedAlt !== null ? 1 : 0)) / questions.length) * 100}
+      />
+
+      {comemorando && (
+        <img loading="lazy"
+          src="/assets/sagui_pulando_2.png"
+          alt=""
+          width={96}
+          height={96}
+          className="fixed bottom-28 right-4 md:bottom-8 md:right-8 w-24 h-24 object-contain z-40 pointer-events-none motion-safe:animate-scale-in drop-shadow-[0_8px_24px_rgba(245,158,11,0.3)]"
+        />
+      )}
+
+      {/* popLayout: a questao que sai nao empurra a que entra, entao o
+          bloco nao "pula" durante a troca. */}
+      <AnimatePresence mode="popLayout" initial={false}>
+      <m.div
+        key={currentIndex}
+        className="glass rounded-2xl p-6"
+        variants={reduzir ? undefined : avancar}
+        initial={reduzir ? false : 'inicial'}
+        animate={reduzir ? undefined : 'animar'}
+        exit={reduzir ? undefined : 'sair'}
+      >
         <p className="text-base text-white font-medium mb-6 leading-relaxed">{question.enunciado}</p>
         <div className="space-y-2.5">
           {question.alternativas.map((alt, idx) => {
@@ -373,11 +534,17 @@ export function QuizPage() {
               else style = 'opacity-30 border-white/5 text-gray-400';
             }
             return (
-              <button
+              <m.button
                 key={idx}
                 onClick={() => handleAnswer(idx)}
                 disabled={selectedAlt !== null}
-                className={`w-full text-left p-4 md:p-4 rounded-xl border ${style} transition-all duration-200 text-sm md:text-base hover:bg-white/[0.02] min-h-[52px]`}
+                initial={reduzir ? false : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={reduzir ? { duration: 0 } : { delay: atrasoDoItem(idx), duration: 0.22 }}
+                whileTap={reduzir || selectedAlt !== null ? undefined : { scale: 0.98 }}
+                className={`w-full text-left p-4 md:p-4 rounded-xl border ${style} transition-all duration-200 text-sm md:text-base hover:bg-white/[0.02] min-h-[52px] press ${
+                  errou && idx === selectedAlt ? 'motion-safe:animate-shake' : ''
+                } ${selectedAlt !== null && idx === question.correta ? 'motion-safe:animate-scale-in' : ''}`}
               >
                 <span className={`inline-flex items-center justify-center w-7 h-7 md:w-6 md:h-6 rounded-lg text-sm font-mono mr-3 ${
                   selectedAlt !== null && idx === question.correta
@@ -389,26 +556,32 @@ export function QuizPage() {
                   {String.fromCharCode(65 + idx)}
                 </span>
                 {alt}
-              </button>
+              </m.button>
             );
           })}
         </div>
 
         {showExplanation && (
           <div className="mt-5 p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 animate-slide-up">
-            <p className="text-xs text-amber-400 font-semibold tracking-wide mb-1">📖 Explicação</p>
+            <p className="text-xs text-amber-400 font-semibold tracking-wide mb-1"><BookOpen size={16} className="inline-block align-[-0.15em] text-amber-400" /> Explicação</p>
             <p className="text-sm text-gray-300 leading-relaxed">{question.explicacao}</p>
           </div>
         )}
 
         {selectedAlt !== null && (
           <div className="flex justify-end mt-5">
-            <button onClick={nextQuestion} className="btn-primary px-6">
-              {currentIndex + 1 < questions.length ? 'Próxima →' : 'Ver resultado'}
-            </button>
+            <m.button
+              onClick={nextQuestion}
+              className="btn-primary px-6"
+              whileTap={reduzir ? undefined : { scale: 0.96 }}
+              transition={springTap}
+            >
+              {currentIndex + 1 < questions.length ? 'Próxima' : 'Ver resultado'}
+            </m.button>
           </div>
         )}
-      </div>
+      </m.div>
+      </AnimatePresence>
     </div>
   );
 }

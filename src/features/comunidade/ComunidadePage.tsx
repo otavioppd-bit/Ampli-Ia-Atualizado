@@ -1,38 +1,26 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useAppStore } from '../../stores/appStore';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Check, Sparkles, TriangleAlert, User, Users } from 'lucide-react';
+import { useAppStore, persistir } from '../../stores/appStore';
 import { getProfile, getEscolasCadastradas, getTurmasCadastradas } from '../../shared/lib/rankingEngine';
 import { moderar } from '../../shared/lib/moderationEngine';
 import { getSupabase, isSupabaseConfigured } from '../../shared/lib/supabase';
 import type { CommunityMessage, Escola, Turma } from '../../shared/types';
 import { createStudyLeague, joinLeague, normalizeStudyLeague, canJoinMoreLeagues, type StudyLeague } from '../../shared/lib/ligasEngine';
-import { IconUsersGroup, IconSparkles } from '../../shared/ui/Icons';
 import { LeagueDetail } from './LeagueDetail';
+import { EmptyState } from '../../shared/ui/EmptyState';
+import { supabaseRepository } from '../../shared/storage/SupabaseRepository';
 
 function gerarId() { return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`; }
 
-function carregarMensagensLocal(turmaId: string): CommunityMessage[] {
-  try {
-    const raw = localStorage.getItem(`mm_comunidade_turma_${turmaId}`);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function salvarMensagensLocal(turmaId: string, msgs: CommunityMessage[]) {
-  localStorage.setItem(`mm_comunidade_turma_${turmaId}`, JSON.stringify(msgs));
-}
-
-function carregarLigasLocal(): StudyLeague[] {
-  try {
-    const raw = localStorage.getItem('mm_study_leagues');
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map(item => normalizeStudyLeague(item)) : [];
-  } catch { return []; }
-}
-
-function salvarLigasLocal(ligas: StudyLeague[]) {
-  localStorage.setItem('mm_study_leagues', JSON.stringify(ligas));
-}
+/*
+ * Mural e ligas agora vivem no banco.
+ *
+ * O codigo anterior guardava tudo em localStorage e, em paralelo, tentava
+ * sincronizar com uma tabela `community_messages` que NUNCA existiu neste
+ * projeto (nome herdado do 001_schema.sql, que jamais foi aplicado). O
+ * resultado era um mural que so funcionava no proprio navegador. A tabela
+ * correta e mensagens_comunidade.
+ */
 
 function getLigasIniciais(): StudyLeague[] {
   return [
@@ -140,6 +128,7 @@ function getLigasIniciais(): StudyLeague[] {
 export function ComunidadePage() {
   const { session, addXP, addLog, setToast } = useAppStore();
   const [mensagens, setMensagens] = useState<CommunityMessage[]>([]);
+  const [falhaAoCarregar, setFalhaAoCarregar] = useState(false);
   const [input, setInput] = useState('');
   const [materia] = useState('Geral');
   const [modError, setModError] = useState('');
@@ -159,21 +148,29 @@ export function ComunidadePage() {
     setEscolas(getEscolasCadastradas());
     setTurmas(getTurmasCadastradas());
 
-    const ligasSalvas = carregarLigasLocal();
-    if (ligasSalvas.length > 0) {
-      setLigas(ligasSalvas);
-      return;
-    }
-
-    const iniciais = getLigasIniciais();
-    setLigas(iniciais);
-    salvarLigasLocal(iniciais);
+    supabaseRepository
+      .loadLigas()
+      .then((remotas) => {
+        // Sem ligas no banco ainda: mostra as de demonstracao para a tela
+        // nao abrir vazia. Elas nao sao gravadas.
+        setLigas(remotas.length > 0 ? (remotas as unknown as StudyLeague[]).map(l => normalizeStudyLeague(l)) : getLigasIniciais());
+      })
+      .catch(() => setLigas(getLigasIniciais()));
   }, []);
 
+  /*
+   * Distingue "o mural esta vazio" de "o mural nao carregou".
+   *
+   * Antes as duas situacoes produziam a mesma tela: lista vazia. O aluno
+   * concluia que ninguem tinha escrito nada, quando na verdade a consulta
+   * havia falhado. Sao mensagens diferentes e merecem telas diferentes.
+   */
   useEffect(() => {
-    if (profile?.turmaId) {
-      setMensagens(carregarMensagensLocal(profile.turmaId));
-    }
+    if (!profile?.turmaId) return;
+    supabaseRepository
+      .loadMensagensTurma()
+      .then((m) => { setMensagens(m); setFalhaAoCarregar(false); })
+      .catch(() => setFalhaAoCarregar(true));
   }, [profile?.turmaId]);
 
   useEffect(() => {
@@ -188,47 +185,22 @@ export function ComunidadePage() {
     msgsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mensagens]);
 
-  // Polling de novas mensagens do Supabase
+  // Atualiza o mural periodicamente. A RLS ja limita o retorno a turma do
+  // aluno, entao nao ha filtro de turma a montar aqui.
   useEffect(() => {
     if (!isSupabaseConfigured() || !profile?.turmaId) return;
-    const sb = getSupabase();
-    if (!sb) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const { data } = await sb
-          .from('community_messages')
-          .select('*')
-          .eq('turma_id', profile.turmaId)
-          .order('timestamp', { ascending: false })
-          .limit(100);
-
-        if (data) {
-          const local = carregarMensagensLocal(profile.turmaId!);
-          const cloudIds = new Set(data.map((m: any) => m.id));
-          const merged = [...data.map((m: any) => ({
-            id: m.id,
-            escolaId: m.escola_id,
-            turmaId: m.turma_id,
-            userId: m.user_id,
-            userName: m.user_name,
-            text: m.text,
-            timestamp: m.timestamp,
-            moderated: m.moderated,
-            moderatedReason: m.moderated_reason,
-            replyTo: m.reply_to,
-            materia: m.materia,
-            likes: m.likes || 0,
-            likedBy: m.liked_by || [],
-          } as CommunityMessage)), ...local.filter(m => !cloudIds.has(m.id))];
-          merged.sort((a, b) => b.timestamp - a.timestamp);
-          setMensagens(merged);
-          salvarMensagensLocal(profile.turmaId!, merged);
-        }
-      } catch {}
-    }, 5000);
-
-    return () => clearInterval(interval);
+    const intervalo = setInterval(() => {
+      /*
+       * A atualizacao periodica NAO marca falha: uma oscilacao de rede a
+       * cada 10s nao deve trocar um mural cheio por um aviso de erro. O
+       * que ja esta na tela continua valendo ate a proxima resposta boa.
+       */
+      supabaseRepository
+        .loadMensagensTurma()
+        .then((m) => { setMensagens(m); setFalhaAoCarregar(false); })
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(intervalo);
   }, [profile?.turmaId]);
 
   const _enviarMensagem = useCallback(async () => {
@@ -255,30 +227,19 @@ export function ComunidadePage() {
       likedBy: [],
     };
 
-    const updated = [novaMsg, ...mensagens];
-    setMensagens(updated);
-    salvarMensagensLocal(profile.turmaId, updated);
-
-    if (isSupabaseConfigured()) {
-      try {
-        const sb = getSupabase();
-        if (sb) {
-          await sb.from('community_messages').insert({
-            id: novaMsg.id,
-            escola_id: novaMsg.escolaId,
-            turma_id: novaMsg.turmaId,
-            user_id: novaMsg.userId,
-            user_name: novaMsg.userName,
-            text: novaMsg.text,
-            timestamp: novaMsg.timestamp,
-            moderated: true,
-            materia: novaMsg.materia,
-          });
-        }
-      } catch (e) {
-        console.warn('Falha ao sincronizar mensagem com nuvem:', e);
-      }
+    setMensagens([novaMsg, ...mensagens]); // otimista
+    const salva = await supabaseRepository.enviarMensagemTurma(
+      resultado.textoLimpio,
+      profile.turmaId,
+      materia === 'Geral' ? undefined : materia,
+    );
+    if (!salva) {
+      setMensagens(mensagens); // desfaz se o servidor recusou
+      setModError('Nao foi possivel enviar a mensagem.');
+      setTimeout(() => setModError(''), 4000);
+      return;
     }
+    setMensagens(prev => prev.map(m => (m.id === novaMsg.id ? { ...salva, userName: novaMsg.userName } : m)));
 
     setInput('');
   }, [input, profile, mensagens, materia]);
@@ -304,7 +265,10 @@ export function ComunidadePage() {
       setLigas(next);
       setSelectedLeagueId(updated.id);
       setPendingJoinLeagueId(null);
-      salvarLigasLocal(next);
+      persistir(supabaseRepository.entrarNaLiga(liga.id), {
+        aoFalhar: () => { setLigas(ligas); setSelectedLeagueId(null); setViewMode('list'); },
+        mensagem: 'Nao foi possivel entrar na liga. Tente de novo.',
+      });
       addXP(updated.xpReward);
       addLog({ timestamp: Date.now(), type: 'atividade', description: `Entrou na liga "${updated.title}"`, xp: updated.xpReward });
       setViewMode('detail');
@@ -318,9 +282,15 @@ export function ComunidadePage() {
   }
 
   function updateLeague(updated: StudyLeague) {
-    const next = ligas.map(item => item.id === updated.id ? updated : item);
-    setLigas(next);
-    salvarLigasLocal(next);
+    const anterior = ligas;
+    setLigas(ligas.map(item => item.id === updated.id ? updated : item));
+    persistir(
+      supabaseRepository.atualizarLiga(updated.id, updated as unknown as Record<string, unknown>),
+      {
+        aoFalhar: () => setLigas(anterior),
+        mensagem: 'Nao foi possivel salvar a alteracao na liga.',
+      },
+    );
   }
 
   const selectedLeague = ligas.find(liga => liga.id === selectedLeagueId) || null;
@@ -346,7 +316,7 @@ export function ComunidadePage() {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/15 to-emerald-600/10 flex items-center justify-center">
-            <IconUsersGroup size={20} className="text-emerald-400" />
+            <Users size={20} className="text-emerald-400" />
           </div>
           <div>
             <h1 className="text-lg md:text-xl font-bold text-white">Ligas de estudo</h1>
@@ -355,9 +325,16 @@ export function ComunidadePage() {
             </p>
           </div>
         </div>
+        {/* O indicador diz a verdade sobre o mural: verde quando carregou,
+            ambar quando a consulta falhou. Antes as duas situacoes exibiam
+            "0 mensagens", e o aluno concluia que a turma estava calada. */}
         <div className="flex items-center gap-1 text-xs text-gray-500">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse-subtle" />
-          {mensagens.length} mensagens
+          <span
+            className={`w-2 h-2 rounded-full ${
+              falhaAoCarregar ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse-subtle'
+            }`}
+          />
+          {falhaAoCarregar ? 'mural indisponível' : `${mensagens.length} mensagens`}
         </div>
       </div>
 
@@ -366,7 +343,7 @@ export function ComunidadePage() {
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-cyan-500/10 flex items-center justify-center shrink-0">
-                <IconSparkles size={16} className="text-cyan-400" />
+                <Sparkles size={16} className="text-cyan-400" />
               </div>
               <div className="min-w-0">
                 <h2 className="text-sm md:text-base font-semibold text-white">Seu espaço de liga</h2>
@@ -384,6 +361,14 @@ export function ComunidadePage() {
               </div>
 
               <div className="flex flex-col gap-2 overflow-y-auto max-h-[calc(100dvh-28rem)] lg:max-h-[calc(100dvh-24rem)] pr-1">
+                {ligas.length === 0 && (
+                  <EmptyState
+                    pose="pulando"
+                    compacto
+                    titulo="Nenhuma liga por aqui"
+                    descricao="Crie a primeira liga da sua turma e chame a galera para bater a meta junto."
+                  />
+                )}
                 {ligas.map(liga => {
                   const isAccepted = liga.joinedBy.includes(profile?.uid || '');
                   const isSelected = selectedLeague?.id === liga.id;
@@ -414,11 +399,11 @@ export function ComunidadePage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 mb-1">
                               <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/[0.06] text-gray-400">{liga.discipline}</span>
-                              {isAccepted && <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">✓ Ativa</span>}
+                              {isAccepted && <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full"><Check size={16} className="inline-block align-[-0.15em] text-emerald-400" /> Ativa</span>}
                             </div>
                             <h3 className="text-sm font-semibold text-white leading-tight">{liga.title}</h3>
                             <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                              <span>👤</span>
+                              <span><User size={16} className="inline-block align-[-0.15em] text-gray-400" /></span>
                               <span>{liga.authorName}</span>
                             </p>
                           </div>
@@ -492,7 +477,7 @@ export function ComunidadePage() {
                       }`}
                     >
                       {selectedLeague.joinedBy.includes(profile?.uid || '')
-                        ? 'Acessar sala →'
+                        ? 'Acessar sala '
                         : pendingJoinLeagueId === selectedLeague.id
                           ? 'Confirmar entrada'
                           : 'Entrar na liga'}
@@ -519,8 +504,7 @@ export function ComunidadePage() {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 rounded-2xl border border-dashed border-white/10 bg-white/5 p-6 text-center text-sm text-gray-500">
-                Escolha uma liga para abrir o painel de desafios.
+              <div className="flex-1 rounded-2xl border border-dashed border-white/10 bg-white/5 p-6 text-center text-sm text-gray-500"> Escolha uma liga para abrir o painel de desafios.
               </div>
             )}
           </div>
@@ -528,7 +512,7 @@ export function ComunidadePage() {
 
         {modError && (
           <div className="text-red-400 text-xs bg-red-500/10 rounded-xl px-4 py-2 border border-red-500/10 mb-2 animate-slide-up flex items-center gap-2">
-            <span>⚠️</span>
+            <span><TriangleAlert size={16} className="inline-block align-[-0.15em] text-amber-400" /></span>
             <span>{modError}</span>
           </div>
         )}

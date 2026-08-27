@@ -1,15 +1,23 @@
 import { useState } from 'react';
 import { useAppStore } from '../../stores/appStore';
+import { AppIcon } from './AppIcon';
+import { Check } from 'lucide-react';
 import type { ChatPersona } from '../types';
 
-const ICONS = ['🧠', '📐', '📝', '🔬', '🌍', '🤖', '📚', '🎯', '💡', '⚡', '🎓', '📖', '✏️', '🔢', '🧪', '🌿', '🗺️', '🏛️', '🎭', '💬'];
+/* Eram 20 emojis; o script de remocao deixou 20 botoes em branco. Agora
+   sao nomes do registro do AppIcon, o mesmo vocabulario do resto do app. */
+const ICONS = [
+  'mente', 'regua', 'escrita', 'ciencia', 'globo', 'livro', 'marcador',
+  'alvo', 'ideia', 'raio', 'foguete', 'trofeu', 'estrela', 'fogo',
+  'musica', 'cafe', 'luaCheia', 'bussola', 'caderno', 'forca',
+];
 const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#ef4444', '#06b6d4', '#84cc16', '#14b8a6', '#f97316'];
 
 export function PersonaManager() {
   const { personas, showPersonaManager, setShowPersonaManager, addPersona, removePersona, setActivePersonaId, activePersonaId } = useAppStore();
   const [name, setName] = useState('');
   const [instruction, setInstruction] = useState('');
-  const [icon, setIcon] = useState('🧠');
+  const [icon, setIcon] = useState('');
   const [color, setColor] = useState('#3b82f6');
 
   if (!showPersonaManager) return null;
@@ -38,8 +46,8 @@ export function PersonaManager() {
       <div className="relative z-10 w-full max-w-lg animate-scale-in">
         <div className="glass-card rounded-3xl max-h-[85dvh] overflow-y-auto">
           <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
-            <h2 className="text-lg font-bold text-white">🎭 Gerenciar Personas</h2>
-            <button onClick={() => setShowPersonaManager(false)} className="btn-ghost text-lg leading-none">✕</button>
+            <h2 className="text-lg font-bold text-white"> Gerenciar Personas</h2>
+            <button onClick={() => setShowPersonaManager(false)} className="btn-ghost text-lg leading-none"></button>
           </div>
 
           <div className="p-5 space-y-5">
@@ -63,15 +71,15 @@ export function PersonaManager() {
                       className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-sm transition-transform group-hover:scale-110"
                       style={{ backgroundColor: p.color + '20' }}
                     >
-                      {p.icon}
+                      <AppIcon name={p.icon} size={20} className="text-amber-300" />
                     </div>
                     <div className="min-w-0 w-full">
                       <p className="text-sm font-semibold text-white truncate">{p.name}</p>
                       <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{p.instruction}</p>
                     </div>
                     {isActive && (
-                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px]" style={{ backgroundColor: p.color }}>
-                        ✓
+                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: p.color }}>
+                        <Check size={12} className="text-gray-900" strokeWidth={3} />
                       </div>
                     )}
                     {!isBuiltIn && (
@@ -79,7 +87,7 @@ export function PersonaManager() {
                         onClick={(e) => { e.stopPropagation(); removePersona(p.id); }}
                         className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-red-500/80 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        ✕
+                        
                       </button>
                     )}
                   </button>
@@ -108,9 +116,17 @@ export function PersonaManager() {
                   <p className="text-[11px] text-gray-500 mb-2">Ícone</p>
                   <div className="flex flex-wrap gap-1.5">
                     {ICONS.map(i => (
-                      <button key={i} onClick={() => setIcon(i)} className={`text-lg w-9 h-9 flex items-center justify-center rounded-xl transition-all ${
-                        icon === i ? 'bg-amber-500/20 scale-110 ring-1 ring-amber-500/30' : 'hover:bg-white/5'
-                      }`}>{i}</button>
+                      <button
+                        key={i}
+                        onClick={() => setIcon(i)}
+                        aria-label={`Ícone ${i}`}
+                        aria-pressed={icon === i}
+                        className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all ${
+                          icon === i ? 'bg-amber-500/20 ring-1 ring-amber-500/30' : 'hover:bg-white/5'
+                        }`}
+                      >
+                        <AppIcon name={i} size={19} className="text-amber-300" />
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -124,8 +140,7 @@ export function PersonaManager() {
                     ))}
                   </div>
                 </div>
-                <button onClick={handleCreate} disabled={!name.trim() || !instruction.trim()} className="btn-primary w-full">
-                  Criar Persona
+                <button onClick={handleCreate} disabled={!name.trim() || !instruction.trim()} className="btn-primary w-full"> Criar Persona
                 </button>
               </div>
             </div>

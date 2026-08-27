@@ -1,0 +1,10 @@
+import { chromium } from 'playwright';
+const nav=await chromium.launch(); const ctx=await nav.newContext({viewport:{width:375,height:812}});
+const page=await ctx.newPage();
+const errs=new Set();
+page.on('console',m=>{if(m.type()==='error')errs.add(m.text().slice(0,220));});
+page.on('pageerror',e=>errs.add('PAGEERROR '+String(e).slice(0,220)));
+await page.goto(process.argv[2]||'http://localhost:5178',{waitUntil:'domcontentloaded'});
+await page.waitForTimeout(4000);
+console.log([...errs].map((e,i)=>`${i+1}. ${e}`).join('\n') || 'nenhum');
+await nav.close();

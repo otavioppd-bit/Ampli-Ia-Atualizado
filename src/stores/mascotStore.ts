@@ -4,11 +4,11 @@ import { create } from 'zustand';
  * Máquina de estados do mascote.
  *
  * Estados da FSM (fluxo esperado no app):
- *   idle    -> usuário ocioso / lendo a questão   (sagui_meditando.png)
- *   typing  -> usuário digitando / interagindo    (caderno + lápis)
- *   loading -> aguardando a IA / avaliando        (tablete com joia de aprovação)
- *   success -> usuário acertou / meta cumprida    (sagui pulando de alegria)
- *   error   -> resposta errada (incentivo)        (imagem neutra)
+ * idle -> usuário ocioso / lendo a questão (sagui_meditando.png)
+ * typing -> usuário digitando / interagindo (caderno + lápis)
+ * loading -> aguardando a IA / avaliando (tablete com joia de aprovação)
+ * success -> usuário acertou / meta cumprida (sagui pulando de alegria)
+ * error -> resposta errada (incentivo) (imagem neutra)
  */
 export type MascotState = 'idle' | 'typing' | 'loading' | 'success' | 'error';
 
@@ -32,11 +32,11 @@ export const MASCOT_ANIM: Record<MascotState, string> = {
 
 /** Mensagem padrão quando o balão está sem texto dinâmico. */
 export const MASCOT_DEFAULT_MSG: Record<MascotState, string> = {
-  idle: 'Respira fundo… leia a questão com calma. 📖',
-  typing: 'Estou te acompanhando! Continua aí. ✍️',
+  idle: 'Respira fundo… leia a questão com calma. ',
+  typing: 'Estou te acompanhando! Continua aí. ',
   loading: 'Analisando com a IA',
-  success: 'Mandou bem! 🎉',
-  error: 'Quase lá! Analisa a explicação e tenta de novo. 💪',
+  success: 'Mandou bem! ',
+  error: 'Quase lá! Analisa a explicação e tenta de novo. ',
 };
 
 interface MascotStore {
@@ -58,11 +58,17 @@ export const mascotStore = create<MascotStore>((set) => ({
   message: null,
   messageId: 0,
   setState: (state, message) => {
-    if (sayTimer) { clearTimeout(sayTimer); sayTimer = null; }
+    if (sayTimer) {
+      clearTimeout(sayTimer);
+      sayTimer = null;
+    }
     set({ state, message: message ?? null, messageId: ++counter });
   },
   say: (message, durationMs = 4000) => {
-    if (sayTimer) { clearTimeout(sayTimer); sayTimer = null; }
+    if (sayTimer) {
+      clearTimeout(sayTimer);
+      sayTimer = null;
+    }
     set({ message, messageId: ++counter });
     sayTimer = setTimeout(() => {
       set((s) => (s.message === message ? { message: null, messageId: ++counter } : s));

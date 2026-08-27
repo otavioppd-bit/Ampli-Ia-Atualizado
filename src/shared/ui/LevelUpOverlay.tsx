@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
-
+import { AnimatePresence, m, useReducedMotion } from 'motion/react';
+import { PartyPopper } from 'lucide-react';
+import { AnimatedNumber } from './AnimatedNumber';
+import { brilhoPulsante, celebracao, springTap } from '../lib/motionPresets';
 const CONFETTI_COLORS = ['#fbbf24', '#f59e0b', '#a78bfa', '#34d399', '#f472b6', '#60a5fa', '#38bdf8'];
 
 interface Confetti { left: number; mx: number; my: number; rot: number; color: string; delay: number; }
@@ -26,7 +29,8 @@ interface LevelUpOverlayProps {
 }
 
 export function LevelUpOverlay({ open, level, onClose }: LevelUpOverlayProps) {
-  const confetti = useMemo(() => (open ? makeConfetti(30) : []), [open]);
+  const reduzir = useReducedMotion();
+  const confetti = useMemo(() => (open || reduzir ? makeConfetti(reduzir ? 0 : 30) : []), [open, reduzir]);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -37,15 +41,19 @@ export function LevelUpOverlay({ open, level, onClose }: LevelUpOverlayProps) {
     return () => { if (closeTimer.current) clearTimeout(closeTimer.current); };
   }, [open, onClose]);
 
-  if (!open) return null;
-
   return (
-    <div
+    <AnimatePresence>
+      {open && (
+    <m.div
       className="levelup-overlay"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label="Parabéns! Level Up"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
     >
       {confetti.map((c, i) => (
         <span
@@ -63,25 +71,55 @@ export function LevelUpOverlay({ open, level, onClose }: LevelUpOverlayProps) {
         />
       ))}
 
-      <div className="levelup-inner" onClick={(e) => e.stopPropagation()}>
-        <div className="levelup-badge">NÍVEL {level}</div>
+      {/* O sagui entra de 0.5 com overshoot: e o pico emocional da sessao,
+          o unico momento do app autorizado a passar de 400ms. */}
+      <m.div
+        className="levelup-inner"
+        onClick={(e) => e.stopPropagation()}
+        variants={reduzir ? undefined : celebracao}
+        initial={reduzir ? { opacity: 0 } : 'inicial'}
+        animate={reduzir ? { opacity: 1 } : 'animar'}
+        exit={reduzir ? { opacity: 0 } : 'sair'}
+      >
+        <div className="levelup-badge">
+          NÍVEL <AnimatedNumber value={level} />
+        </div>
 
         <div className="levelup-mascot">
-          <div className="levelup-glow" />
+          {/* Brilho por opacity, nunca box-shadow: sombra animada repinta
+              a arvore inteira a cada quadro. */}
+          <m.div
+            className="levelup-glow"
+            variants={reduzir ? undefined : brilhoPulsante}
+            initial={reduzir ? false : 'inicial'}
+            animate={reduzir ? undefined : 'animar'}
+          />
           <img
-            src="/assets/sagui_pulando_2.png"
-            alt="Sagui pulando de alegria"
+            loading="lazy"
+            src="/assets/sagui_aprovacao_2.png"
+            alt="Sagui comemorando"
+            width={160}
+            height={160}
             draggable={false}
           />
         </div>
 
-        <h2 className="levelup-title">Parabéns! Level Up! 🎉</h2>
-        <p className="levelup-sub">Seu foco te levou mais alto! Continue assim.</p>
+        <h2 className="levelup-title">
+          Level up! <PartyPopper size={18} className="inline-block align-[-0.15em] text-amber-400" />
+        </h2>
+        <p className="levelup-sub">Seu foco te levou mais alto. Continue assim.</p>
 
-        <button onClick={onClose} className="btn-primary levelup-btn">
-          Continuar 🚀
-        </button>
-      </div>
-    </div>
+        <m.button
+          onClick={onClose}
+          className="btn-primary levelup-btn"
+          whileTap={reduzir ? undefined : { scale: 0.96 }}
+          transition={springTap}
+        >
+          Continuar
+        </m.button>
+      </m.div>
+    </m.div>
+      )}
+    </AnimatePresence>
   );
 }

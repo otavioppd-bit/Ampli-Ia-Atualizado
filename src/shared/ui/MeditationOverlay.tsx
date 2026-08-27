@@ -113,7 +113,7 @@ export function MeditationOverlay({ open, onClose, onComplete, durationSec = DEF
                 i === phase ? 'text-emerald-300 bg-emerald-500/15 border border-emerald-400/30' : 'text-gray-600 border border-white/5'
               }`}
             >
-              {p === 'INSPIRA' ? '🧘 Inspira' : p === 'EXPIRA' ? '🌬️ Expira' : p}
+              {p === 'INSPIRA' ? ' Inspira' : p === 'EXPIRA' ? ' Expira' : p}
             </span>
           ))}
         </div>
@@ -126,20 +126,17 @@ export function MeditationOverlay({ open, onClose, onComplete, durationSec = DEF
           />
         </div>
 
-        <p className="text-xs text-gray-500 max-w-xs leading-relaxed">
-          Inspire pelo nariz em 4s, segure, e expire pela boca em 4s.
-          Deixe o sagui te guiar no ritmo da respiração. 🫁
+        <p className="text-xs text-gray-500 max-w-xs leading-relaxed"> Inspire pelo nariz em 4s, segure, e expire pela boca em 4s.
+          Deixe o sagui te guiar no ritmo da respiração. 
         </p>
 
         <div className="flex gap-3">
-          <button onClick={onClose} className="btn-ghost text-xs text-gray-400 hover:text-gray-200">
-            Sair
+          <button onClick={onClose} className="btn-ghost text-xs text-gray-400 hover:text-gray-200"> Sair
           </button>
           <button
             onClick={() => { completedRef.current = true; onComplete(remaining); }}
             className="btn-primary px-6"
-          >
-            Concluir ✓
+          > Concluir 
           </button>
         </div>
       </div>

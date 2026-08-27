@@ -103,7 +103,7 @@ export function correctEssay(text: string, tema?: string): EssayCorrection {
   if (paragraphCount >= 4) c4 += 20;
   c4 = Math.max(0, Math.min(200, c4));
 
-  // Competência 5: Proposta de intervenção — agente, ação, meio e finalidade (0-200)
+  // Competência 5: Proposta de intervenção - agente, ação, meio e finalidade (0-200)
   let c5 = 0;
   const hasAgente = foundAgentes.length > 0;
   const hasAcao = foundAcao.length > 0;
@@ -145,7 +145,7 @@ export function correctEssay(text: string, tema?: string): EssayCorrection {
     if (!hasFinalidade) pontosMelhorar.push('Apontar a finalidade/efeito da proposta de intervenção');
   }
 
-  if (wordCount < 150) pontosMelhorar.push('Texto muito curto — mínimo recomendado: 150 palavras');
+  if (wordCount < 150) pontosMelhorar.push('Texto muito curto - mínimo recomendado: 150 palavras');
 
   return {
     competencia1: Math.round(c1),
@@ -178,6 +178,6 @@ export async function correctEssayAI(text: string, apiKey: string, tema?: string
     };
   } catch {
     const fallback = correctEssay(text, tema);
-    return { ...fallback, pontosFortes: ['Correção IA não disponível — usado fallback offline', ...fallback.pontosFortes] };
+    return { ...fallback, pontosFortes: ['Correção IA não disponível - usado fallback offline', ...fallback.pontosFortes] };
   }
 }

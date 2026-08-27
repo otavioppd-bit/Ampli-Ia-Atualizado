@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { useStoreStore } from '../../stores/storeStore';
 import { getStoreItem } from '../../shared/lib/storeCatalog';
+import { AppIcon } from '../../shared/ui/AppIcon';
 
 const FOCUS_MIN = 25;
 const CYCLE_XP = 5;
 
-const SAGUI_FOCUS = '/assets/sagui%20estudando%20com%20o%20caderno%20e%20um%20lapis_2.png';
-const SAGUI_REST = '/workspaces/Ampli-IA/ChatGPT Image 10 de ago. de 2026, 16_03_53.png';
+const SAGUI_FOCUS = '/assets/sagui_estudando_caderno_2.png';
+const SAGUI_REST = '/assets/sagui_acenando_2.png';
 const SAGUI_FOCUS_FALLBACK = '/assets/sagui_estudando_2.png';
 const SAGUI_REST_FALLBACK = '/assets/sagui_meditando_2.png';
 
@@ -66,7 +67,7 @@ export function FocusCompanion() {
       setShowRestAlert(true);
       addXP(CYCLE_XP);
       addLog({ timestamp: Date.now(), type: 'foco', description: `Ciclo de foco completo na Companhia (${FOCUS_MIN}min)`, xp: CYCLE_XP });
-      setToast(`+${CYCLE_XP} XP — ciclo completo! 🎉`, 'success');
+      setToast(`+${CYCLE_XP} XP - ciclo completo! `, 'success');
     }
   }, [phase, seconds, addXP, addLog, setToast]);
 
@@ -81,13 +82,20 @@ export function FocusCompanion() {
     timerRef.current = null;
     setShowRestAlert(rest);
     setPhase('rest');
-    if (rest) setToast('Hora de descansar a mente e recuperar as energias 🧘', 'info');
+    if (rest) setToast('Hora de descansar a mente e recuperar as energias ', 'info');
   }
 
   const progresso = phase === 'idle' ? 0 : ((FOCUS_MIN * 60 - seconds) / (FOCUS_MIN * 60)) * 100;
 
+  // Fica logo acima da bottom nav, nao no meio da tela: em 375px o card
+  // cobria o controle de Cansaco do Dashboard. A safe-area entra na conta
+  // para nao encostar na barra de gestos do iPhone.
   return (
-    <div className="fixed z-[80] right-3 md:right-6 bottom-36 md:bottom-8 w-[calc(100vw-1.5rem)] max-w-[300px]">
+    <div
+      className="fixed z-[80] right-3 md:right-6 w-[min(300px,calc(100vw-1.5rem))] pointer-events-none"
+      style={{ bottom: 'calc(5.25rem + env(safe-area-inset-bottom, 0px))' }}
+    >
+      <div className="pointer-events-auto">
       {!open ? (
         /* FAB colapsado */
         <button
@@ -120,7 +128,7 @@ export function FocusCompanion() {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-white/[0.03]">
             <div className="flex items-center gap-2">
-              <span className="text-sm">⏱️</span>
+              <span className="text-sm">⏱</span>
               <p className="text-sm font-bold text-white">Companhia de Foco</p>
             </div>
             <button
@@ -151,13 +159,13 @@ export function FocusCompanion() {
                   title={`Acessório equipado: ${equippedItem.name}`}
                   aria-label={`Acessório equipado: ${equippedItem.name}`}
                 >
-                  {equippedItem.emoji}
+                  <AppIcon name={equippedItem.icon} size={22} className="text-amber-300" />
                 </span>
               )}
               <span className={`absolute bottom-2 left-[18%] text-[9px] font-bold px-2 py-0.5 rounded-full ${
                 phase === 'focus' ? 'bg-emerald-500/90 text-emerald-950' : 'bg-violet-500/20 text-violet-300 border border-violet-500/25'
               }`}>
-                {phase === 'focus' ? '✍️ FOCADO' : phase === 'rest' ? '🧘 DESCANSO' : '🌙 PRONTO'}
+                {phase === 'focus' ? ' FOCADO' : phase === 'rest' ? ' DESCANSO' : ' PRONTO'}
               </span>
             </div>
 
@@ -185,12 +193,10 @@ export function FocusCompanion() {
 
             {/* Status e alerta amigável */}
             {phase === 'focus' ? (
-              <p className="text-center text-xs text-emerald-300/90 bg-emerald-500/10 border border-emerald-500/15 rounded-xl px-3 py-2.5 mb-3">
-                📚 O Sagui está estudando junto com você. Continue firme!
+              <p className="text-center text-xs text-emerald-300/90 bg-emerald-500/10 border border-emerald-500/15 rounded-xl px-3 py-2.5 mb-3"> O Sagui está estudando junto com você. Continue firme!
               </p>
             ) : showRestAlert ? (
-              <p className="text-center text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/15 rounded-xl px-3 py-2.5 mb-3 animate-fade-up">
-                🧘 Ciclo concluído! Hora de descansar a mente e recuperar as energias. Aproveite 5 minutinhos longe da tela.
+              <p className="text-center text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/15 rounded-xl px-3 py-2.5 mb-3 animate-fade-up"> Ciclo concluído! Hora de descansar a mente e recuperar as energias. Aproveite 5 minutinhos longe da tela.
               </p>
             ) : null}
 
@@ -211,8 +217,7 @@ export function FocusCompanion() {
               <button
                 onClick={() => { setShowRestAlert(false); startFocus(); }}
                 className="w-full mt-2 text-xs text-gray-500 hover:text-amber-300 transition-colors"
-              >
-                Sentiram falta do companheiro? Voltar a estudar →
+              > Sentiram falta do companheiro? Voltar a estudar 
               </button>
             )}
 
@@ -222,6 +227,7 @@ export function FocusCompanion() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

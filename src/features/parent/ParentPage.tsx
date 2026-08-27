@@ -1,6 +1,7 @@
 import { useAppStore } from '../../stores/appStore';
-import { IconMoon, IconLogOut } from '../../shared/ui/Icons';
+import { LogOut, Moon } from 'lucide-react';
 import { ParentsDashboard } from './ParentsDashboard';
+import { PainelCuidado } from './PainelCuidado';
 
 export function ParentPage() {
   const { session, logout } = useAppStore();
@@ -12,7 +13,7 @@ export function ParentPage() {
         <div className="max-w-5xl mx-auto px-4 md:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/10">
-              <IconMoon size={20} className="text-gray-900" />
+              <Moon size={20} className="text-gray-900" />
             </div>
             <div>
               <h1 className="text-sm font-extrabold text-white">
@@ -27,11 +28,16 @@ export function ParentPage() {
               Responsável
             </span>
             <button onClick={logout} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all" title="Sair">
-              <IconLogOut size={16} />
+              <LogOut size={16} />
             </button>
           </div>
         </div>
       </header>
+
+      {/* Cuidado vem ANTES dos graficos: quem abre este painel depois de
+          um alerta precisa do caminho para agir, nao de uma serie
+          historica. Os graficos continuam logo abaixo. */}
+      <PainelCuidado />
 
       <ParentsDashboard />
     </div>

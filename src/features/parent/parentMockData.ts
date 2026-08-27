@@ -1,7 +1,7 @@
 import { StudentMonthlyRecord } from '../../shared/lib/dropoutRisk';
 
 export const STUDENT_NAME = 'Pedro Henrique';
-export const STUDENT_TURMA = '3º Ano — Ensino Médio Noturno · Turma C';
+export const STUDENT_TURMA = '3º Ano - Ensino Médio Noturno · Turma C';
 export const STUDENT_SCHOOL = 'EE Prof. Ana Néri';
 
 // Taxa de acerto nos exercícios de raciocínio lógico do app
@@ -17,7 +17,7 @@ export function monthLabel(month: string): string {
 }
 
 // Histórico mensal: nota escolar média, desempenho nos exercícios do app
-// e tempo de uso em horas — últimos 12 meses.
+// e tempo de uso em horas - últimos 12 meses.
 export interface CognitiveRecord {
   month: string; // "YYYY-MM"
   notaEscolar: number; // 0-100
@@ -44,7 +44,7 @@ export function toMonthlyRecord(records: CognitiveRecord[]): StudentMonthlyRecor
   return records.map(r => ({ month: r.month, notaMedia: r.notaEscolar, tempoUso: r.tempoUso }));
 }
 
-// Horas estudadas por semana no último mês (Gráfico 1 — barras)
+// Horas estudadas por semana no último mês (Gráfico 1 - barras)
 export const weeklyStudyHours = [
   { week: 'Semana 1', horas: 9.5 },
   { week: 'Semana 2', horas: 11.0 },

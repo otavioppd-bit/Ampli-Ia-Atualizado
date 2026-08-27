@@ -1,0 +1,213 @@
+<title>Pendências Ampli-IA</title>
+<style>
+  :root {
+    --ground:#f7f8fa; --surface:#fff; --surface-alt:#eef1f5; --line:#d9dee7;
+    --ink:#0b1120; --ink-mid:#475061;
+    --accent:#b45309; --accent-bg:#f59e0b1a;
+    --ok:#047857; --ok-bg:#10b98118;
+    --warn:#b45309; --warn-bg:#f59e0b1a;
+    --bad:#b91c1c; --bad-bg:#ef444418;
+    --radius:10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0b1120; --surface:#111827; --surface-alt:#161f2f; --line:#1e293b;
+      --ink:#e8edf6; --ink-mid:#94a3b8;
+      --accent:#f59e0b; --accent-bg:#f59e0b1f;
+      --ok:#34d399; --ok-bg:#10b9811f;
+      --warn:#fbbf24; --warn-bg:#f59e0b1f;
+      --bad:#f87171; --bad-bg:#ef44441f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0b1120; --surface:#111827; --surface-alt:#161f2f; --line:#1e293b;
+    --ink:#e8edf6; --ink-mid:#94a3b8;
+    --accent:#f59e0b; --accent-bg:#f59e0b1f;
+    --ok:#34d399; --ok-bg:#10b9811f;
+    --warn:#fbbf24; --warn-bg:#f59e0b1f;
+    --bad:#f87171; --bad-bg:#ef44441f;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+    font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:62rem; margin:0 auto; padding:3.5rem 1.5rem 6rem;
+    display:flex; flex-direction:column; gap:2.75rem; }
+  .eyebrow { font-size:.72rem; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--ink-mid); font-weight:600; margin:0 0 .7rem; }
+  h1 { font-family:Georgia,"Iowan Old Style","Times New Roman",serif; font-weight:600;
+    font-size:clamp(2rem,5vw,2.9rem); line-height:1.1; letter-spacing:-.015em;
+    margin:0 0 .6rem; text-wrap:balance; }
+  .sub { margin:0; color:var(--ink-mid); font-size:1.05rem; max-width:56ch; }
+
+  .resumo { display:grid; grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));
+    gap:1px; background:var(--line); border:1px solid var(--line);
+    border-radius:var(--radius); overflow:hidden; }
+  .cell { background:var(--surface); padding:1rem 1.1rem; }
+  .cell dt { font-size:.7rem; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-mid); font-weight:600; margin:0 0 .45rem; }
+  .cell dd { margin:0; font-size:1.45rem; font-weight:680; font-variant-numeric:tabular-nums;
+    line-height:1.1; }
+  .cell .note { display:block; font-size:.78rem; font-weight:400; color:var(--ink-mid);
+    margin-top:.4rem; line-height:1.4; }
+
+  section { display:flex; flex-direction:column; gap:1rem; }
+  h2 { font-family:Georgia,"Iowan Old Style","Times New Roman",serif; font-size:1.45rem;
+    font-weight:600; letter-spacing:-.01em; margin:0; display:flex; align-items:baseline; gap:.7rem; }
+  h2 .tag { font-family:ui-monospace,"Cascadia Code",Consolas,monospace; font-size:.68rem;
+    font-weight:700; padding:.22rem .5rem; border-radius:5px; letter-spacing:.05em;
+    text-transform:uppercase; white-space:nowrap; }
+  .tag--ok { color:var(--ok); background:var(--ok-bg); }
+  .tag--warn { color:var(--warn); background:var(--warn-bg); }
+  .tag--bad { color:var(--bad); background:var(--bad-bg); }
+
+  p { margin:0; max-width:72ch; color:var(--ink-mid); }
+  p strong { color:var(--ink); font-weight:620; }
+  code { font-family:ui-monospace,"Cascadia Code",Consolas,monospace; font-size:.86em;
+    background:var(--surface-alt); border:1px solid var(--line); padding:.08em .36em;
+    border-radius:5px; color:var(--ink); }
+
+  .tablewrap { overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); }
+  table { border-collapse:collapse; width:100%; font-size:.88rem; min-width:38rem; }
+  th,td { text-align:left; padding:.6rem .85rem; border-bottom:1px solid var(--line);
+    vertical-align:top; }
+  th { background:var(--surface-alt); font-size:.68rem; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--ink-mid); font-weight:650; white-space:nowrap; }
+  td { background:var(--surface); color:var(--ink-mid); }
+  tr:last-child td { border-bottom:none; }
+  td:first-child { color:var(--ink); font-weight:600; }
+  .pill { display:inline-block; padding:.13rem .5rem; border-radius:99px;
+    font-size:.74rem; font-weight:650; white-space:nowrap; }
+  .p-ok { background:var(--ok-bg); color:var(--ok); }
+  .p-todo { background:var(--warn-bg); color:var(--warn); }
+
+  .callout { border-left:3px solid var(--bad); background:var(--bad-bg);
+    padding:1rem 1.2rem; border-radius:0 var(--radius) var(--radius) 0;
+    display:flex; flex-direction:column; gap:.5rem; }
+  .callout h3 { margin:0; font-size:.95rem; font-weight:700; color:var(--bad); }
+  .callout p { color:var(--ink); }
+  .callout--ok { border-left-color:var(--ok); background:var(--ok-bg); }
+  .callout--ok h3 { color:var(--ok); }
+
+  ol.ordem { margin:0; padding-left:1.3rem; display:flex; flex-direction:column;
+    gap:.5rem; color:var(--ink-mid); }
+  ol.ordem li::marker { color:var(--accent); font-weight:700; }
+  ol.ordem strong { color:var(--ink); }
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important;} }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Ampli-IA &middot; Midnight Mentor</p>
+    <h1>Estado do projeto</h1>
+    <p class="sub">Banco aplicado e testado, Fases 1 e 2 de front concluídas. Sobrou uma pendência de segurança que só você resolve.</p>
+  </header>
+
+  <dl class="resumo">
+    <div class="cell">
+      <dt>Banco</dt><dd style="color:var(--ok)">20 de 20</dd>
+      <span class="note">Migrations 003 a 009 aplicadas e verificadas com usuário real.</span>
+    </div>
+    <div class="cell">
+      <dt>Fase 1</dt><dd style="color:var(--ok)">completa</dd>
+      <span class="note">As 5 tarefas e os 7 itens que estavam pela metade.</span>
+    </div>
+    <div class="cell">
+      <dt>Fase 2</dt><dd style="color:var(--ok)">completa</dd>
+      <span class="note">As 6 tarefas. Custo no bundle inicial: +4,4 kB gzip.</span>
+    </div>
+    <div class="cell">
+      <dt>Segurança</dt><dd style="color:var(--bad)">1 aberta</dd>
+      <span class="note">A service_role antiga continua respondendo 200.</span>
+    </div>
+  </dl>
+
+  <div class="callout">
+    <h3>A chave service_role antiga ainda funciona</h3>
+    <p>Testei agora: ela responde <strong>HTTP 200</strong> com acesso total, ignorando toda a RLS. Ela está no histórico da nossa conversa, então qualquer pessoa com acesso a esse texto tem acesso irrestrito ao banco. Em <strong>Settings &rarr; API</strong>, a rotação precisa ser feita no campo da <em>service_role</em> especificamente. É a única coisa realmente urgente que sobrou.</p>
+  </div>
+
+  <section>
+    <h2><span class="tag tag--ok">Fechado</span>Exploit de XP e o resto dos bugs</h2>
+    <p>O XP infinito que você encontrou tinha duas camadas: o cliente lia o estado depois de inverter o checkbox, e o servidor não registrava que a tarefa já tinha pago. Só a correção do cliente não bastaria, porque dava para chamar a RPC pelo console.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Bug</th><th>Verificação</th></tr></thead>
+        <tbody>
+          <tr><td>XP infinito no Plano do Dia</td><td>4 chamadas extras na mesma tarefa creditaram <strong>zero</strong> (20 &rarr; 20)</td></tr>
+          <tr><td>Nível divergente</td><td>servidor e <code>calcLevel</code> batem em 0, 99, 100, 299, 300, 599, 600, 1000</td></tr>
+          <tr><td>Inventário vazando entre contas</td><td>logout limpa o store da loja e o cache de escolas</td></tr>
+          <tr><td>Chat trazia as 100 mais antigas</td><td>passou a buscar as mais recentes</td></tr>
+          <tr><td>Funções nunca chamadas</td><td><code>carregar()</code> e <code>hidratarCache()</code> ligadas no boot</td></tr>
+          <tr><td>Compra sem saldo / item repetido</td><td>recusadas pelo servidor com o preço lido do banco</td></tr>
+          <tr><td>Aluno setando a própria turma</td><td>bloqueado; só entra pelo código do professor</td></tr>
+          <tr><td>Reescrever mensagem alheia ao curtir</td><td>bloqueado por trigger</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="tag tag--ok">Fechado</span>Fase 1 de front</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Item</th><th>Resultado</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Emojis</td><td>565 &rarr; 0. <code>Icons.tsx</code> migrado e removido (224 linhas de código morto)</td><td><span class="pill p-ok">ok</span></td></tr>
+          <tr><td>Navegação</td><td>bottom nav de 5, bottom sheet, top bar mobile, rail de tablet</td><td><span class="pill p-ok">ok</span></td></tr>
+          <tr><td>Grids responsivos</td><td>zero <code>grid-cols-3</code> sem breakpoint</td><td><span class="pill p-ok">ok</span></td></tr>
+          <tr><td>Login</td><td>sagui nas duas etapas, mostrar senha, validação inline</td><td><span class="pill p-ok">ok</span></td></tr>
+          <tr><td>Microinterações</td><td>quiz com shake e barra de sessão, risco animado, +XP flutuante, streak padronizado</td><td><span class="pill p-ok">ok</span></td></tr>
+          <tr><td>Estados vazios</td><td><code>EmptyState</code> com o sagui em Caderno, Ranking, Dashboard, Foco, Redação e Comunidade</td><td><span class="pill p-ok">ok</span></td></tr>
+          <tr><td>Skeletons</td><td><code>ListSkeleton</code> em uso, shimmer aplicado</td><td><span class="pill p-ok">ok</span></td></tr>
+          <tr><td>Performance</td><td>1.080 kB &rarr; 348 kB. Memoização feita, <code>loading="lazy"</code> em 10 imagens</td><td><span class="pill p-ok">ok</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="tag tag--ok">Fechado</span>Fase 2: animação e fluidez</h2>
+    <p>Todo movimento sai de <code>motionPresets.ts</code>, um arquivo só, para o conjunto não divergir com o tempo. Nada anima <code>width</code>, <code>height</code> ou <code>box-shadow</code>: apenas <code>transform</code> e <code>opacity</code>, que rodam na GPU sem recalcular layout.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Tarefa</th><th>O que entrou</th></tr></thead>
+        <tbody>
+          <tr><td>1. Transição entre abas</td><td><code>AnimatePresence mode="wait"</code>; destaque ativo desliza entre itens por <code>layoutId</code>, um para cada navegação</td></tr>
+          <tr><td>2. Stagger em listas</td><td>Dashboard, Quiz, Loja, Ranking e bottom sheet. Teto de 10 itens; ranking com <code>layout</code>, então a posição desliza ao mudar</td></tr>
+          <tr><td>3. Spring nos interativos</td><td><code>whileTap</code> na navegação e nos botões; bottom sheet fecha ao arrastar para baixo; Modal centraliza a entrada e a saída para todos os overlays</td></tr>
+          <tr><td>4. Números e progresso</td><td><code>AnimatedNumber</code> em XP, streak, saldo e nível; barras por <code>scaleX</code> com spring</td></tr>
+          <tr><td>5. Celebração</td><td>Level up com o sagui entrando de 0.5, brilho por opacity e nível contando</td></tr>
+          <tr><td>6. Carregamento</td><td>Toast com spring e <code>layout</code>; próxima questão do quiz entra por <code>popLayout</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>Sobre o peso:</strong> importado direto, o <code>motion</code> somava 132 kB ao primeiro carregamento, o que contraria o requisito de performance do próprio brief. Com <code>LazyMotion</code> e componentes <code>m</code>, o motor de animação chega depois da primeira pintura e o custo caiu para <strong>+11,6 kB</strong> (+4,4 kB gzip).</p>
+  </section>
+
+  <section>
+    <h2><span class="tag tag--warn">Decisão</span>Duas escolhas suas</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Assunto</th><th>Situação</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Token do proxy de IA</td>
+            <td><code>VITE_AI_PROXY_TOKEN</code> vai no bundle, então é público e não protege sua cota Gemini. Saídas: exigir o JWT do Supabase no Worker, rate limit por IP, ou aceitar o risco.</td>
+          </tr>
+          <tr>
+            <td>Cadastro de escolas e turmas</td>
+            <td>Continua fora do app de propósito, feito por SQL. Um painel de admin seria o próximo passo natural.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="callout callout--ok">
+    <h3>Base atual</h3>
+    <p>build verde &middot; 86 de 86 testes &middot; 0 vulnerabilidades &middot; 0 emojis &middot; 0 travessões &middot; 0 grids fixos &middot; 0 animações de layout &middot; chunk inicial 360 kB (era 1.080 kB) &middot; 20 de 20 verificações de banco</p>
+  </div>
+
+</div>

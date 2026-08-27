@@ -1,0 +1,1019 @@
+<title>Migration Ampli-IA</title>
+<style>
+  :root {
+    --ground:#f7f8fa; --surface:#fff; --surface-alt:#eef1f5; --line:#d9dee7;
+    --ink:#0b1120; --ink-mid:#475061;
+    --accent:#b45309; --accent-bg:#f59e0b1a;
+    --ok:#047857; --ok-bg:#10b98118;
+    --warn:#b91c1c; --warn-bg:#ef444418;
+    --code-bg:#0b1120; --code-ink:#dbe3ef; --radius:10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0b1120; --surface:#111827; --surface-alt:#161f2f; --line:#1e293b;
+      --ink:#e8edf6; --ink-mid:#94a3b8;
+      --accent:#f59e0b; --accent-bg:#f59e0b1f;
+      --ok:#34d399; --ok-bg:#10b9811f;
+      --warn:#f87171; --warn-bg:#ef44441f;
+      --code-bg:#060a13; --code-ink:#dbe3ef;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0b1120; --surface:#111827; --surface-alt:#161f2f; --line:#1e293b;
+    --ink:#e8edf6; --ink-mid:#94a3b8;
+    --accent:#f59e0b; --accent-bg:#f59e0b1f;
+    --ok:#34d399; --ok-bg:#10b9811f;
+    --warn:#f87171; --warn-bg:#ef44441f;
+    --code-bg:#060a13; --code-ink:#dbe3ef;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+    font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:64rem; margin:0 auto; padding:3.5rem 1.5rem 6rem;
+    display:flex; flex-direction:column; gap:3rem; }
+  .eyebrow { font-size:.72rem; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--ink-mid); font-weight:600; margin:0 0 .7rem; }
+  h1 { font-family:Georgia,"Iowan Old Style","Times New Roman",serif; font-weight:600;
+    font-size:clamp(2rem,5vw,2.9rem); line-height:1.1; letter-spacing:-.015em;
+    margin:0 0 .6rem; text-wrap:balance; }
+  .sub { margin:0; color:var(--ink-mid); font-size:1.05rem; max-width:52ch; }
+  .status { display:grid; grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));
+    gap:1px; background:var(--line); border:1px solid var(--line);
+    border-radius:var(--radius); overflow:hidden; }
+  .cell { background:var(--surface); padding:1.1rem 1.2rem; }
+  .cell dt { font-size:.72rem; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-mid); font-weight:600; margin:0 0 .5rem; }
+  .cell dd { margin:0; font-size:1.12rem; font-weight:650;
+    font-variant-numeric:tabular-nums; display:flex; align-items:center; gap:.5rem; }
+  .cell .note { display:block; font-size:.82rem; font-weight:400; color:var(--ink-mid);
+    margin-top:.35rem; line-height:1.45; }
+  .dot { width:.55rem; height:.55rem; border-radius:50%; flex:none; }
+  .dot--ok{background:var(--ok);} .dot--warn{background:var(--warn);}
+  section { display:flex; flex-direction:column; gap:1rem; }
+  h2 { font-family:Georgia,"Iowan Old Style","Times New Roman",serif; font-size:1.5rem;
+    font-weight:600; letter-spacing:-.01em; margin:0;
+    display:flex; align-items:baseline; gap:.7rem; }
+  h2 .num { font-family:ui-monospace,"Cascadia Code",Consolas,monospace; font-size:.8rem;
+    font-weight:700; color:var(--accent); background:var(--accent-bg);
+    padding:.2rem .5rem; border-radius:5px; letter-spacing:.04em; }
+  p { margin:0; max-width:70ch; color:var(--ink-mid); }
+  p strong { color:var(--ink); font-weight:620; }
+  code.inl { font-family:ui-monospace,"Cascadia Code",Consolas,monospace; font-size:.87em;
+    background:var(--surface-alt); border:1px solid var(--line); padding:.1em .38em;
+    border-radius:5px; color:var(--ink); }
+  .sqlbox { border:1px solid var(--line); border-radius:var(--radius);
+    overflow:hidden; background:var(--code-bg); }
+  .sqlbar { display:flex; align-items:center; justify-content:space-between; gap:1rem;
+    padding:.7rem .9rem; background:var(--surface); border-bottom:1px solid var(--line); }
+  .sqlbar .path { font-family:ui-monospace,Consolas,monospace; font-size:.8rem;
+    color:var(--ink-mid); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  button.copy { font:600 .82rem/1 ui-sans-serif,system-ui,sans-serif; color:#0b1120;
+    background:#f59e0b; border:1px solid #d97706; padding:.55rem .9rem; border-radius:7px;
+    cursor:pointer; flex:none; transition:filter .15s ease, transform .06s ease; }
+  button.copy:hover{filter:brightness(1.08);} button.copy:active{transform:translateY(1px);}
+  button.copy:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  button.copy[data-done="1"]{background:#10b981;border-color:#047857;}
+  pre { margin:0; padding:1.1rem; max-height:26rem; overflow:auto; background:var(--code-bg);
+    color:var(--code-ink); font-family:ui-monospace,"Cascadia Code",Consolas,monospace;
+    font-size:.78rem; line-height:1.6; tab-size:2; }
+  pre.short { max-height:none; }
+  .tablewrap { overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); }
+  table { border-collapse:collapse; width:100%; font-size:.88rem; min-width:38rem; }
+  th,td { text-align:left; padding:.6rem .9rem; border-bottom:1px solid var(--line); }
+  th { background:var(--surface-alt); font-size:.7rem; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--ink-mid); font-weight:650; }
+  td { background:var(--surface); color:var(--ink-mid); }
+  tr:last-child td { border-bottom:none; }
+  td:first-child { color:var(--ink); font-weight:600; white-space:nowrap; }
+  .pill { display:inline-block; padding:.15rem .55rem; border-radius:99px;
+    font-size:.78rem; font-weight:600; }
+  .pill--ok { background:var(--ok-bg); color:var(--ok); }
+  .pill--bad { background:var(--warn-bg); color:var(--warn); }
+  .callout { border-left:3px solid var(--warn); background:var(--warn-bg);
+    padding:1rem 1.2rem; border-radius:0 var(--radius) var(--radius) 0;
+    display:flex; flex-direction:column; gap:.5rem; }
+  .callout h3 { margin:0; font-size:.95rem; font-weight:700; color:var(--warn); }
+  .callout p { color:var(--ink); }
+  ol.steps { margin:0; padding-left:1.3rem; display:flex; flex-direction:column;
+    gap:.6rem; color:var(--ink-mid); }
+  ol.steps li::marker { color:var(--accent); font-weight:700; }
+  ol.steps strong { color:var(--ink); }
+  details { border:1px solid var(--line); border-radius:var(--radius);
+    background:var(--surface); overflow:hidden; }
+  summary { padding:.9rem 1.1rem; cursor:pointer; font-weight:620; color:var(--ink); }
+  summary:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+  details .body { border-top:1px solid var(--line); }
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important;} }
+</style>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Ampli-IA &middot; Supabase &middot; bxidxlcismcvryznpomh</p>
+    <h1>Migration do banco</h1>
+    <p class="sub">Schema aplicado e patch da recursao no ar. Revalidado por API com dois usuarios reais: <strong>37 verificacoes, zero falhas</strong>.</p>
+  </header>
+
+  <dl class="status">
+    <div class="cell">
+      <dt>Schema</dt><dd><span class="dot dot--ok"></span>aplicado</dd>
+      <span class="note">20 tabelas + view ranking, todas respondendo.</span>
+    </div>
+    <div class="cell">
+      <dt>RLS</dt><dd><span class="dot dot--ok"></span>37 de 37</dd>
+      <span class="note">Isolamento, escalonamento, XP e ligas: todos se comportam como projetado.</span>
+    </div>
+    <div class="cell">
+      <dt>Ligas</dt><dd><span class="dot dot--ok"></span>corrigido</dd>
+      <span class="note">Recursao 42P17 resolvida pelo patch 004 e testada com dado real.</span>
+    </div>
+    <div class="cell">
+      <dt>Codigo do app</dt><dd><span class="dot dot--warn"></span>desalinhado</dd>
+      <span class="note">Ainda chama <code class="inl">profiles</code>, <code class="inl">gamification</code>&hellip;</span>
+    </div>
+  </dl>
+
+  <section>
+    <h2><span class="num">01</span>O que foi verificado</h2>
+    <p>Criei dois usuarios descartaveis, exercitei as 21 tabelas com sessao autenticada de verdade e <strong>apaguei os dois</strong> &mdash; o projeto voltou a zero usuarios e zero linhas.</p>
+    <p>O teste de ligas usa <strong>dado real</strong> de proposito: com a chave anon a resposta e 401, negado no nivel de <em>grant</em>, antes da RLS sequer rodar. So uma sessao autenticada prova que a policy avalia sem recursao.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Area</th><th>Verificacao</th><th>Resultado</th></tr></thead>
+        <tbody>
+<tr class=""><td>Tabelas</td><td>as 21 respondem para usuario autenticado</td><td><span class="pill pill--ok">21 de 21, HTTP 200, nenhum 500</span></td></tr>
+<tr class=""><td>Trigger</td><td>signup cria perfil, gamificacao e preferencias</td><td><span class="pill pill--ok">3 de 3, papel=student</span></td></tr>
+<tr class=""><td>Isolamento</td><td>A busca o perfil de B pelo id</td><td><span class="pill pill--ok">0 linhas</span></td></tr>
+<tr class=""><td>Escalonamento</td><td>PATCH perfis papel=admin</td><td><span class="pill pill--ok">400 &mdash; barrado pelo trigger</span></td></tr>
+<tr class=""><td>XP</td><td>PATCH gamificacao xp=999999</td><td><span class="pill pill--ok">403 &mdash; privilegio revogado</span></td></tr>
+<tr class=""><td>XP</td><td>registrar_xp pedindo 9.999</td><td><span class="pill pill--ok">limitado a 500 por evento</span></td></tr>
+<tr class=""><td>Escrita</td><td>A cria nota em nome de B</td><td><span class="pill pill--ok">403 &mdash; RLS barrou</span></td></tr>
+<tr class=""><td>Ligas</td><td>A cria liga</td><td><span class="pill pill--ok">201</span></td></tr>
+<tr class=""><td>Ligas</td><td>B nao ve a liga de A</td><td><span class="pill pill--ok">0 linhas</span></td></tr>
+<tr class=""><td>Ligas</td><td>B entra e passa a ver a liga</td><td><span class="pill pill--ok">via sou_membro_liga()</span></td></tr>
+<tr class=""><td>Ligas</td><td>A (criador) ve os membros</td><td><span class="pill pill--ok">via sou_criador_liga()</span></td></tr>
+<tr class=""><td>Anon</td><td>perfis, gamificacao, notas, ligas, ranking</td><td><span class="pill pill--ok">401 nas cinco</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">02</span>O bug que apareceu (e foi corrigido)</h2>
+    <p>A policy de <code class="inl">ligas</code> consultava <code class="inl">liga_membros</code>, cuja policy consultava <code class="inl">ligas</code> &mdash; ciclo infinito, e o Postgres devolvia <code class="inl">42P17</code>. A correcao move as duas consultas cruzadas para funcoes <code class="inl">security definer</code>, que rodam como dono e por isso nao reaplicam a RLS da tabela consultada. E o mesmo padrao que ja protegia <code class="inl">meu_papel()</code> e <code class="inl">sou_educador()</code> &mdash; escapou so nesse par.</p>
+    <div class="sqlbox">
+      <div class="sqlbar">
+        <span class="path">supabase/migrations/004_fix_recursao_ligas.sql &mdash; ja aplicado</span>
+        <button class="copy" data-target="sql4" type="button">Copiar patch</button>
+      </div>
+      <pre id="sql4" class="short">-- =====================================================================
+-- Correcao: recursao infinita nas policies de ligas
+--
+-- Sintoma real (via API, com a chave anon):
+--   GET /rest/v1/ligas        -&gt; 500
+--   {&quot;code&quot;:&quot;42P17&quot;,&quot;message&quot;:&quot;infinite recursion detected in policy
+--    for relation \&quot;ligas\&quot;&quot;}
+--
+-- Causa: as duas policies se chamavam em ciclo.
+--   ligas_sel        consultava liga_membros
+--     -&gt; dispara liga_membros_sel, que consultava ligas
+--        -&gt; dispara ligas_sel ... sem fim.
+--
+-- Correcao: mover cada consulta cruzada para uma funcao SECURITY DEFINER.
+-- Ela roda com os privilegios do dono e por isso NAO aplica a RLS da
+-- tabela consultada - o ciclo se rompe. E o mesmo padrao ja usado em
+-- meu_papel() / minha_escola_id() / sou_educador().
+--
+-- Rode este arquivo no SQL Editor. Nao mexe em dado nenhum.
+-- =====================================================================
+
+begin;
+
+-- ---------------------------------------------------------------------
+-- Funcoes que quebram o ciclo
+-- ---------------------------------------------------------------------
+create or replace function public.sou_membro_liga(p_liga_id uuid)
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.liga_membros
+     where liga_id = p_liga_id
+       and user_id = (select auth.uid())
+  );
+$$;
+
+create or replace function public.sou_criador_liga(p_liga_id uuid)
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.ligas
+     where id = p_liga_id
+       and criador_id = (select auth.uid())
+  );
+$$;
+
+-- ---------------------------------------------------------------------
+-- Policies reescritas - mesma regra de negocio, sem o ciclo
+-- ---------------------------------------------------------------------
+
+-- ligas: vejo a liga que criei ou aquelas de que participo
+drop policy if exists ligas_sel on public.ligas;
+create policy ligas_sel on public.ligas for select using (
+  criador_id = (select auth.uid())
+  or public.sou_membro_liga(id)
+);
+
+-- liga_membros: vejo minha propria filiacao; o criador ve a lista toda
+drop policy if exists liga_membros_sel on public.liga_membros;
+create policy liga_membros_sel on public.liga_membros for select using (
+  user_id = (select auth.uid())
+  or public.sou_criador_liga(liga_id)
+);
+
+-- sair da liga (proprio) ou remover membro (criador)
+drop policy if exists liga_membros_del on public.liga_membros;
+create policy liga_membros_del on public.liga_membros for delete using (
+  user_id = (select auth.uid())
+  or public.sou_criador_liga(liga_id)
+);
+
+commit;
+
+-- =====================================================================
+-- Verificacao: as duas devem devolver [] e nao 500.
+--   GET /rest/v1/ligas?select=*&amp;limit=1
+--   GET /rest/v1/liga_membros?select=*&amp;limit=1
+-- =====================================================================
+</pre>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">03</span>O que ainda falta</h2>
+    <p>O banco esta pronto, mas o app ainda nao fala com ele. O codigo chama <code class="inl">profiles</code>, <code class="inl">gamification</code> e <code class="inl">quiz_results</code> &mdash; nomes do <code class="inl">001_schema.sql</code>, que nunca foi aplicado neste projeto. O schema real usa <code class="inl">perfis</code>, <code class="inl">gamificacao</code> e <code class="inl">quiz_resultados</code>.</p>
+    <ol class="steps">
+      <li>Reescrever <strong>UserRepository</strong> e <strong>SupabaseRepository</strong> contra o schema novo.</li>
+      <li>Remover o login local: sessao e papel passam a vir do <strong>JWT</strong>.</li>
+      <li>Trocar as ~20 chaves <code class="inl">mm_*</code> por chamadas ao banco.</li>
+      <li>Trocar a escrita de XP pela RPC <code class="inl">registrar_xp()</code>.</li>
+    </ol>
+  </section>
+
+  <details>
+    <summary>Schema completo &mdash; 003_schema_completo.sql</summary>
+    <div class="body">
+      <div class="sqlbar">
+        <span class="path">supabase/migrations/003_schema_completo.sql</span>
+        <button class="copy" data-target="sql3" type="button">Copiar SQL</button>
+      </div>
+      <pre id="sql3">-- =====================================================================
+-- Ampli-IA - SCHEMA COMPLETO
+-- Cole this inteiro no Supabase SQL Editor e rode uma vez.
+--
+-- Substitui 001_schema.sql (nunca aplicado) e 002_app_tables.sql (aditivo).
+-- Recria tudo do zero: as 4 tabelas que existiam no projeto estavam VAZIAS
+-- (verificado via API: 0 linhas em perfis, escolas, assinaturas_escolas e
+-- mensagens_comunidade), entao nao ha dado a perder.
+--
+-- Cobre 100% do que hoje vive em localStorage:
+--   mm_users/mm_session -&gt; Supabase Auth      mm_inventory      -&gt; inventario
+--   mm_gamification     -&gt; gamificacao        mm_plan_&lt;data&gt;    -&gt; planos_diarios
+--   mm_logs             -&gt; logs               mm_study_leagues  -&gt; ligas
+--   mm_notas            -&gt; notas              mm_foco_historico -&gt; sessoes_foco
+--   mm_chat_messages    -&gt; chat_mensagens     mm_challenge_*    -&gt; desafios_redacao
+--   mm_personas         -&gt; personas           mm_escolas/turmas -&gt; escolas/turmas
+--   mm_color_blindness, mm_tutorial_*, mm_active_persona -&gt; preferencias
+--
+-- Fica DE FORA de proposito:
+--   mm_api_key           chave Gemini do proprio usuario; num banco
+--                        compartilhado ela vira alvo. Continua local.
+--   mm_quiz_topics_cache cache puro, reconstruivel.
+-- =====================================================================
+
+begin;
+
+-- ---------------------------------------------------------------------
+-- 1. Limpeza do schema antigo
+-- ---------------------------------------------------------------------
+-- As 4 que existiam no projeto (todas vazias)...
+drop table if exists public.mensagens_comunidade  cascade;
+drop table if exists public.assinaturas_escolas   cascade;
+drop table if exists public.perfis                cascade;
+drop table if exists public.escolas               cascade;
+
+-- ...e as novas, para que rodar o script duas vezes nao quebre.
+drop view  if exists public.ranking               cascade;
+drop table if exists public.liga_membros          cascade;
+drop table if exists public.ligas                 cascade;
+drop table if exists public.inventario            cascade;
+drop table if exists public.planos_diarios        cascade;
+drop table if exists public.sessoes_foco          cascade;
+drop table if exists public.humor_historico       cascade;
+drop table if exists public.desafios_redacao      cascade;
+drop table if exists public.redacoes              cascade;
+drop table if exists public.quiz_resultados       cascade;
+drop table if exists public.personas              cascade;
+drop table if exists public.notas                 cascade;
+drop table if exists public.chat_mensagens        cascade;
+drop table if exists public.logs                  cascade;
+drop table if exists public.gamificacao           cascade;
+drop table if exists public.preferencias          cascade;
+drop table if exists public.turmas                cascade;
+
+drop function if exists public.get_user_escola_id()            cascade;
+drop function if exists public.is_admin_escola()               cascade;
+drop function if exists public.escola_tem_assinatura_ativa(uuid) cascade;
+
+-- ---------------------------------------------------------------------
+-- 2. Tipos
+-- ---------------------------------------------------------------------
+do $$ begin
+  create type public.papel_usuario as enum (&#x27;student&#x27;, &#x27;educator&#x27;, &#x27;parent&#x27;, &#x27;admin&#x27;);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type public.humor_tipo as enum (
+    &#x27;stress&#x27;,&#x27;anxiety&#x27;,&#x27;sadness&#x27;,&#x27;tired&#x27;,&#x27;demotivated&#x27;,
+    &#x27;focused&#x27;,&#x27;motivated&#x27;,&#x27;happy&#x27;,&#x27;energetic&#x27;,&#x27;neutral&#x27;
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type public.log_tipo as enum (
+    &#x27;atividade&#x27;,&#x27;exercicio&#x27;,&#x27;foco&#x27;,&#x27;quiz&#x27;,&#x27;essay&#x27;,&#x27;login&#x27;,&#x27;tutorial&#x27;
+  );
+exception when duplicate_object then null; end $$;
+
+-- ---------------------------------------------------------------------
+-- 3. Escolas e turmas
+-- ---------------------------------------------------------------------
+create table public.escolas (
+  id          uuid primary key default gen_random_uuid(),
+  nome        text not null,
+  cidade      text default &#x27;&#x27;,
+  cor         text default &#x27;#f59e0b&#x27;,
+  criado_em   timestamptz not null default now()
+);
+
+create table public.turmas (
+  id          uuid primary key default gen_random_uuid(),
+  escola_id   uuid not null references public.escolas(id) on delete cascade,
+  nome        text not null,
+  ano         text default &#x27;&#x27;,
+  criado_em   timestamptz not null default now()
+);
+create index turmas_escola_idx on public.turmas (escola_id);
+
+-- ---------------------------------------------------------------------
+-- 4. Perfis
+--    id = auth.users.id. Sem coluna &#x27;uid text&#x27; intermediaria: a posse e
+--    conferida direto contra o JWT, entao nao existe identidade paralela
+--    que o cliente possa forjar.
+-- ---------------------------------------------------------------------
+create table public.perfis (
+  id                  uuid primary key references auth.users(id) on delete cascade,
+  email               text not null,
+  nome                text not null,
+  sobrenome           text default &#x27;&#x27;,
+  papel               public.papel_usuario not null default &#x27;student&#x27;,
+  escola_id           uuid references public.escolas(id) on delete set null,
+  turma_id            uuid references public.turmas(id) on delete set null,
+  meta_estudo         text default &#x27;&#x27;,
+  email_responsaveis  text,
+  avatar_url          text,
+  criado_em           timestamptz not null default now(),
+  atualizado_em       timestamptz not null default now()
+);
+create index perfis_escola_idx on public.perfis (escola_id);
+create index perfis_turma_idx  on public.perfis (turma_id);
+
+-- Preferencias de UI (substitui varias chaves soltas do localStorage)
+create table public.preferencias (
+  user_id            uuid primary key references public.perfis(id) on delete cascade,
+  daltonismo         text    not null default &#x27;none&#x27;,
+  tutorial_completo  boolean not null default false,
+  desafio_tutorial   boolean not null default false,
+  persona_ativa_id   bigint,
+  mudo               boolean not null default false,
+  atualizado_em      timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------
+-- 5. Assinaturas (monetizacao por escola - preservado do schema antigo)
+-- ---------------------------------------------------------------------
+create table public.assinaturas_escolas (
+  id                uuid primary key default gen_random_uuid(),
+  escola_id         uuid not null references public.escolas(id) on delete cascade,
+  pagador_id        uuid references public.perfis(id) on delete set null,
+  email_pagador     text not null,
+  status_pagamento  text not null default &#x27;pendente&#x27;
+                    check (status_pagamento in (&#x27;pendente&#x27;,&#x27;ativa&#x27;,&#x27;cancelada&#x27;,&#x27;expirada&#x27;)),
+  expira_em         timestamptz,
+  criado_em         timestamptz not null default now(),
+  atualizado_em     timestamptz not null default now()
+);
+create index assinaturas_escola_idx on public.assinaturas_escolas (escola_id);
+
+-- ---------------------------------------------------------------------
+-- 6. Gamificacao
+--    SEM policy de INSERT/UPDATE para o cliente: XP so entra pela funcao
+--    registrar_xp() (secao 11). Com ranking valendo alguma coisa, deixar
+--    a coluna gravavel e o mesmo que deixar o placar aberto.
+-- ---------------------------------------------------------------------
+create table public.gamificacao (
+  user_id           uuid primary key references public.perfis(id) on delete cascade,
+  xp                integer not null default 0   check (xp &gt;= 0),
+  level             integer not null default 1   check (level &gt;= 1),
+  streak            integer not null default 1   check (streak &gt;= 0),
+  ultimo_acesso     date,
+  atualizado_em     timestamptz not null default now()
+);
+
+create table public.logs (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references public.perfis(id) on delete cascade,
+  tipo        public.log_tipo not null,
+  descricao   text not null,
+  xp          integer not null default 0,
+  criado_em   timestamptz not null default now()
+);
+create index logs_user_idx on public.logs (user_id, criado_em desc);
+
+-- ---------------------------------------------------------------------
+-- 7. Conteudo do aluno
+-- ---------------------------------------------------------------------
+create table public.chat_mensagens (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references public.perfis(id) on delete cascade,
+  papel       text not null check (papel in (&#x27;user&#x27;,&#x27;assistant&#x27;)),
+  texto       text not null,
+  humor       public.humor_tipo,
+  imagem      text,
+  criado_em   timestamptz not null default now()
+);
+create index chat_user_idx on public.chat_mensagens (user_id, criado_em);
+
+create table public.notas (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references public.perfis(id) on delete cascade,
+  texto       text not null,
+  tag         text,
+  criado_em   timestamptz not null default now()
+);
+create index notas_user_idx on public.notas (user_id, criado_em desc);
+
+create table public.personas (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references public.perfis(id) on delete cascade,
+  nome        text not null,
+  icone       text default &#x27;🧠&#x27;,
+  cor         text default &#x27;#f59e0b&#x27;,
+  instrucao   text not null,
+  criado_em   timestamptz not null default now()
+);
+create index personas_user_idx on public.personas (user_id);
+
+create table public.quiz_resultados (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references public.perfis(id) on delete cascade,
+  materia     text not null,
+  acertos     integer not null check (acertos &gt;= 0),
+  total       integer not null check (total &gt; 0),
+  xp_ganho    integer not null default 0,
+  criado_em   timestamptz not null default now(),
+  constraint quiz_acertos_validos check (acertos &lt;= total)
+);
+create index quiz_user_idx on public.quiz_resultados (user_id, criado_em desc);
+
+create table public.redacoes (
+  id              bigint generated always as identity primary key,
+  user_id         uuid not null references public.perfis(id) on delete cascade,
+  tema            text,
+  nota_final      integer not null check (nota_final between 0 and 1000),
+  competencia1    integer not null check (competencia1 between 0 and 200),
+  competencia2    integer not null check (competencia2 between 0 and 200),
+  competencia3    integer not null check (competencia3 between 0 and 200),
+  competencia4    integer not null check (competencia4 between 0 and 200),
+  competencia5    integer not null check (competencia5 between 0 and 200),
+  pontos_fortes   text[] not null default &#x27;{}&#x27;,
+  pontos_melhorar text[] not null default &#x27;{}&#x27;,
+  texto_original  text,
+  criado_em       timestamptz not null default now()
+);
+create index redacoes_user_idx on public.redacoes (user_id, criado_em desc);
+
+-- Desafio de redacao cronometrado (mm_challenge_results)
+create table public.desafios_redacao (
+  id                    bigint generated always as identity primary key,
+  user_id               uuid not null references public.perfis(id) on delete cascade,
+  tema                  text not null,
+  nota_final            integer not null check (nota_final between 0 and 1000),
+  competencia1          integer not null default 0,
+  competencia2          integer not null default 0,
+  competencia3          integer not null default 0,
+  competencia4          integer not null default 0,
+  competencia5          integer not null default 0,
+  xp_ganho              integer not null default 0,
+  tempo_usado_segundos  integer not null default 0,
+  finalizado            boolean not null default false,
+  criado_em             timestamptz not null default now()
+);
+create index desafios_user_idx on public.desafios_redacao (user_id, criado_em desc);
+
+create table public.humor_historico (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references public.perfis(id) on delete cascade,
+  humor       public.humor_tipo not null,
+  texto       text,
+  criado_em   timestamptz not null default now()
+);
+create index humor_user_idx on public.humor_historico (user_id, criado_em desc);
+
+-- Pomodoro / foco (mm_foco_historico)
+create table public.sessoes_foco (
+  id                bigint generated always as identity primary key,
+  user_id           uuid not null references public.perfis(id) on delete cascade,
+  tipo              text not null check (tipo in (&#x27;foco&#x27;,&#x27;pausa&#x27;)),
+  duracao_minutos   integer not null check (duracao_minutos &gt; 0),
+  criado_em         timestamptz not null default now()
+);
+create index foco_user_idx on public.sessoes_foco (user_id, criado_em desc);
+
+-- Plano diario (mm_plan_&lt;data&gt;): 1 por usuario por dia
+create table public.planos_diarios (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references public.perfis(id) on delete cascade,
+  data        date not null,
+  humor       public.humor_tipo,
+  tarefas     jsonb not null default &#x27;[]&#x27;,
+  criado_em   timestamptz not null default now(),
+  unique (user_id, data)
+);
+
+-- Loja (mm_inventory)
+create table public.inventario (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references public.perfis(id) on delete cascade,
+  item_id     text not null,
+  equipado    boolean not null default false,
+  criado_em   timestamptz not null default now(),
+  unique (user_id, item_id)
+);
+
+-- ---------------------------------------------------------------------
+-- 8. Social: comunidade e ligas
+-- ---------------------------------------------------------------------
+create table public.mensagens_comunidade (
+  id          bigint generated always as identity primary key,
+  turma_id    uuid references public.turmas(id) on delete cascade,
+  escola_id   uuid references public.escolas(id) on delete cascade,
+  autor_id    uuid not null references public.perfis(id) on delete cascade,
+  conteudo    text not null check (length(conteudo) between 1 and 2000),
+  criado_em   timestamptz not null default now()
+);
+create index mensagens_turma_idx on public.mensagens_comunidade (turma_id, criado_em desc);
+
+create table public.ligas (
+  id          uuid primary key default gen_random_uuid(),
+  nome        text not null,
+  descricao   text default &#x27;&#x27;,
+  criador_id  uuid not null references public.perfis(id) on delete cascade,
+  codigo      text unique not null default upper(substr(md5(random()::text), 1, 6)),
+  criado_em   timestamptz not null default now()
+);
+
+create table public.liga_membros (
+  liga_id     uuid not null references public.ligas(id) on delete cascade,
+  user_id     uuid not null references public.perfis(id) on delete cascade,
+  entrou_em   timestamptz not null default now(),
+  primary key (liga_id, user_id)
+);
+
+-- ---------------------------------------------------------------------
+-- 9. Funcoes auxiliares
+--    STABLE + security definer: usadas dentro de policies, precisam ler
+--    perfis sem cair na RLS da propria tabela (senao da recursao infinita).
+-- ---------------------------------------------------------------------
+create or replace function public.meu_papel()
+returns public.papel_usuario
+language sql stable security definer set search_path = public as $$
+  select papel from public.perfis where id = (select auth.uid());
+$$;
+
+create or replace function public.minha_escola_id()
+returns uuid
+language sql stable security definer set search_path = public as $$
+  select escola_id from public.perfis where id = (select auth.uid());
+$$;
+
+create or replace function public.minha_turma_id()
+returns uuid
+language sql stable security definer set search_path = public as $$
+  select turma_id from public.perfis where id = (select auth.uid());
+$$;
+
+create or replace function public.sou_educador()
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select papel in (&#x27;educator&#x27;,&#x27;admin&#x27;) from public.perfis where id = (select auth.uid())),
+    false);
+$$;
+
+-- Estas duas existem para QUEBRAR RECURSAO entre ligas e liga_membros.
+-- Se a policy de ligas consultasse liga_membros direto (e vice-versa), o
+-- Postgres entraria em ciclo e devolveria 42P17. Sendo SECURITY DEFINER,
+-- a consulta roda como dono e nao reaplica a RLS da tabela consultada.
+create or replace function public.sou_membro_liga(p_liga_id uuid)
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.liga_membros
+     where liga_id = p_liga_id and user_id = (select auth.uid())
+  );
+$$;
+
+create or replace function public.sou_criador_liga(p_liga_id uuid)
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.ligas
+     where id = p_liga_id and criador_id = (select auth.uid())
+  );
+$$;
+
+create or replace function public.escola_tem_assinatura_ativa(p_escola_id uuid)
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.assinaturas_escolas
+     where escola_id = p_escola_id
+       and status_pagamento = &#x27;ativa&#x27;
+       and (expira_em is null or expira_em &gt; now())
+  );
+$$;
+
+-- ---------------------------------------------------------------------
+-- 10. Signup: cria perfil, gamificacao e preferencias
+--
+--     SEGURANCA: o papel entra SEMPRE como &#x27;student&#x27;. O raw_user_meta_data
+--     vem do cliente no signUp; obedecer a ele deixaria qualquer pessoa se
+--     cadastrar como admin. Promocao e ato administrativo (secao 12).
+-- ---------------------------------------------------------------------
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.perfis (id, email, nome, papel)
+  values (
+    new.id,
+    new.email,
+    coalesce(nullif(trim(new.raw_user_meta_data -&gt;&gt; &#x27;nome&#x27;), &#x27;&#x27;), split_part(new.email, &#x27;@&#x27;, 1)),
+    &#x27;student&#x27;
+  )
+  on conflict (id) do nothing;
+
+  insert into public.gamificacao (user_id) values (new.id) on conflict do nothing;
+  insert into public.preferencias (user_id) values (new.id) on conflict do nothing;
+  return new;
+end $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- ---------------------------------------------------------------------
+-- 11. XP no servidor
+--     O cliente nao escreve em gamificacao. Manda o evento; o servidor
+--     decide quanto vale, limita por chamada, recalcula o nivel e cuida
+--     do streak. Sem isto o ranking e ficcao.
+-- ---------------------------------------------------------------------
+create or replace function public.registrar_xp(
+  p_tipo public.log_tipo,
+  p_descricao text,
+  p_xp integer default 0
+)
+returns public.gamificacao
+language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_xp   integer := greatest(0, least(coalesce(p_xp, 0), 500));  -- teto por evento
+  v_hoje date := (now() at time zone &#x27;utc&#x27;)::date;
+  v_row  public.gamificacao;
+begin
+  if v_user is null then
+    raise exception &#x27;nao autenticado&#x27;;
+  end if;
+
+  insert into public.logs (user_id, tipo, descricao, xp)
+  values (v_user, p_tipo, left(coalesce(p_descricao, &#x27;&#x27;), 500), v_xp);
+
+  -- Garante a linha: contas criadas antes do trigger (ou se ele falhar)
+  -- nao teriam registro em gamificacao e o UPDATE abaixo viraria no-op,
+  -- devolvendo null e perdendo o XP silenciosamente.
+  insert into public.gamificacao (user_id) values (v_user)
+    on conflict (user_id) do nothing;
+
+  update public.gamificacao g
+     set xp     = g.xp + v_xp,
+         -- 100 XP por nivel
+         level  = greatest(1, ((g.xp + v_xp) / 100) + 1),
+         streak = case
+                    when g.ultimo_acesso = v_hoje then g.streak
+                    when g.ultimo_acesso = v_hoje - 1 then g.streak + 1
+                    else 1
+                  end,
+         ultimo_acesso = v_hoje,
+         atualizado_em = now()
+   where g.user_id = v_user
+   returning * into v_row;
+
+  return v_row;
+end $$;
+
+-- Ranking.
+--
+-- Uma view roda com os privilegios do DONO, entao ela IGNORA a RLS das
+-- tabelas de baixo. Aqui isso e proposital (ranking precisa enxergar
+-- outros alunos), mas por isso o filtro de escopo tem de estar DENTRO da
+-- view - e nao ser deixado a cargo do cliente.
+--
+-- Escopo: apenas colegas da MESMA escola. Um ranking global exporia nome
+-- e escola de estudantes menores de idade para qualquer conta cadastrada.
+-- Colunas: nenhuma PII alem do nome de exibicao (sem e-mail).
+create or replace view public.ranking as
+  select p.id, p.nome, p.avatar_url, p.escola_id, p.turma_id,
+         e.nome as escola_nome, t.nome as turma_nome,
+         g.xp, g.level, g.streak
+    from public.perfis p
+    join public.gamificacao g on g.user_id = p.id
+    left join public.escolas e on e.id = p.escola_id
+    left join public.turmas  t on t.id = p.turma_id
+   where p.papel = &#x27;student&#x27;
+     and (
+       p.id = (select auth.uid())                              -- sempre me vejo
+       or (p.escola_id is not null
+           and p.escola_id = public.minha_escola_id())          -- colegas de escola
+       or exists (                                              -- colegas de liga
+         select 1 from public.liga_membros m1
+           join public.liga_membros m2 on m2.liga_id = m1.liga_id
+          where m1.user_id = (select auth.uid()) and m2.user_id = p.id
+       )
+     );
+
+-- ---------------------------------------------------------------------
+-- 12. Promocao de papel - inacessivel ao app
+--     Rode no SQL Editor:  select public.promover_usuario(&#x27;x@y.com&#x27;,&#x27;educator&#x27;);
+-- ---------------------------------------------------------------------
+create or replace function public.promover_usuario(p_email text, p_papel public.papel_usuario)
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  update public.perfis p set papel = p_papel, atualizado_em = now()
+    from auth.users u where u.id = p.id and u.email = p_email;
+  if not found then raise exception &#x27;usuario nao encontrado: %&#x27;, p_email; end if;
+end $$;
+
+revoke all on function public.promover_usuario(text, public.papel_usuario)
+  from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 13. RLS: liga em TODAS as tabelas
+--     Tabela sem RLS + chave anon (que e publica, vai no bundle do front)
+--     = tabela aberta na internet.
+-- ---------------------------------------------------------------------
+alter table public.escolas              enable row level security;
+alter table public.turmas               enable row level security;
+alter table public.perfis               enable row level security;
+alter table public.preferencias         enable row level security;
+alter table public.assinaturas_escolas  enable row level security;
+alter table public.gamificacao          enable row level security;
+alter table public.logs                 enable row level security;
+alter table public.chat_mensagens       enable row level security;
+alter table public.notas                enable row level security;
+alter table public.personas             enable row level security;
+alter table public.quiz_resultados      enable row level security;
+alter table public.redacoes             enable row level security;
+alter table public.desafios_redacao     enable row level security;
+alter table public.humor_historico      enable row level security;
+alter table public.sessoes_foco         enable row level security;
+alter table public.planos_diarios       enable row level security;
+alter table public.inventario           enable row level security;
+alter table public.mensagens_comunidade enable row level security;
+alter table public.ligas                enable row level security;
+alter table public.liga_membros         enable row level security;
+
+-- ---------------------------------------------------------------------
+-- 14. Policies &quot;dono faz tudo no que e seu&quot;
+--     Em laco: sao 12 tabelas com a MESMA regra. Escrever 48 policies na
+--     mao e exatamente onde nasce o erro de copiar-colar que deixa uma
+--     tabela aberta.
+--
+--     USING      -&gt; quais linhas eu enxergo/altero
+--     WITH CHECK -&gt; como a linha pode ficar depois de gravar
+--     Os dois sao necessarios: so USING no UPDATE deixaria transferir a
+--     linha para outro dono.
+-- ---------------------------------------------------------------------
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    &#x27;chat_mensagens&#x27;,&#x27;notas&#x27;,&#x27;personas&#x27;,&#x27;quiz_resultados&#x27;,&#x27;redacoes&#x27;,
+    &#x27;desafios_redacao&#x27;,&#x27;humor_historico&#x27;,&#x27;sessoes_foco&#x27;,&#x27;planos_diarios&#x27;,
+    &#x27;inventario&#x27;,&#x27;preferencias&#x27;,&#x27;logs&#x27;
+  ]
+  loop
+    execute format(&#x27;create policy %I on public.%I for select using ((select auth.uid()) = user_id)&#x27;,            t||&#x27;_sel&#x27;, t);
+    execute format(&#x27;create policy %I on public.%I for insert with check ((select auth.uid()) = user_id)&#x27;,       t||&#x27;_ins&#x27;, t);
+    execute format(&#x27;create policy %I on public.%I for update using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id)&#x27;, t||&#x27;_upd&#x27;, t);
+    execute format(&#x27;create policy %I on public.%I for delete using ((select auth.uid()) = user_id)&#x27;,            t||&#x27;_del&#x27;, t);
+  end loop;
+end $$;
+
+-- logs tambem sao lidos pelo educador da turma (acompanhamento pedagogico)
+create policy logs_educador_sel on public.logs for select using (
+  public.sou_educador()
+  and exists (select 1 from public.perfis p
+               where p.id = logs.user_id and p.escola_id = public.minha_escola_id())
+);
+
+-- ---------------------------------------------------------------------
+-- 15. Policies especificas
+-- ---------------------------------------------------------------------
+
+-- perfis
+create policy perfis_sel_proprio on public.perfis
+  for select using ((select auth.uid()) = id);
+create policy perfis_sel_educador on public.perfis
+  for select using (public.sou_educador() and escola_id = public.minha_escola_id());
+create policy perfis_ins_proprio on public.perfis
+  for insert with check ((select auth.uid()) = id);
+
+create policy perfis_upd_proprio on public.perfis
+  for update using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
+
+-- Trava de papel e escola.
+--
+-- Sem isto: PATCH /perfis?id=eq.&lt;meu_id&gt; {&quot;papel&quot;:&quot;admin&quot;} -&gt; virou admin
+-- da escola, com acesso aos dados de todos os alunos.
+--
+-- Trigger em vez de WITH CHECK porque o trigger compara OLD com NEW de
+-- forma explicita, sem depender de quando a policy avalia o snapshot.
+-- auth.uid() nulo = chamada de service_role / SQL Editor, onde a troca e
+-- justamente o que se quer (ver promover_usuario).
+create or replace function public.trava_campos_perfil()
+returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if (select auth.uid()) is not null then
+    if new.papel is distinct from old.papel then
+      raise exception &#x27;papel do usuario nao pode ser alterado pelo app&#x27;;
+    end if;
+    if new.escola_id is distinct from old.escola_id
+       or new.turma_id is distinct from old.turma_id then
+      raise exception &#x27;escola/turma so mudam por acao administrativa&#x27;;
+    end if;
+    if new.id is distinct from old.id then
+      raise exception &#x27;id do perfil e imutavel&#x27;;
+    end if;
+  end if;
+  new.atualizado_em := now();
+  return new;
+end $$;
+
+drop trigger if exists perfis_trava_campos on public.perfis;
+create trigger perfis_trava_campos
+  before update on public.perfis
+  for each row execute function public.trava_campos_perfil();
+
+-- gamificacao: leitura sim, escrita nao (so via registrar_xp)
+create policy gamificacao_sel_propria on public.gamificacao
+  for select using ((select auth.uid()) = user_id);
+create policy gamificacao_sel_educador on public.gamificacao
+  for select using (
+    public.sou_educador()
+    and exists (select 1 from public.perfis p
+                 where p.id = gamificacao.user_id and p.escola_id = public.minha_escola_id())
+  );
+
+-- escolas / turmas: autenticado le (para escolher a sua); so admin escreve
+create policy escolas_sel on public.escolas for select to authenticated using (true);
+create policy turmas_sel  on public.turmas  for select to authenticated using (true);
+create policy escolas_upd_admin on public.escolas for update
+  using (public.meu_papel() = &#x27;admin&#x27; and id = public.minha_escola_id())
+  with check (public.meu_papel() = &#x27;admin&#x27; and id = public.minha_escola_id());
+create policy turmas_all_admin on public.turmas for all
+  using (public.meu_papel() = &#x27;admin&#x27; and escola_id = public.minha_escola_id())
+  with check (public.meu_papel() = &#x27;admin&#x27; and escola_id = public.minha_escola_id());
+
+-- assinaturas: dado financeiro. Escrita fica com o webhook (service_role,
+-- que ignora RLS) - o cliente nunca grava aqui.
+create policy assinaturas_sel on public.assinaturas_escolas for select using (
+  (select auth.uid()) = pagador_id
+  or (public.meu_papel() = &#x27;admin&#x27; and escola_id = public.minha_escola_id())
+);
+
+-- comunidade: mural da turma
+create policy mensagens_sel on public.mensagens_comunidade
+  for select using (turma_id = public.minha_turma_id() or escola_id = public.minha_escola_id());
+create policy mensagens_ins on public.mensagens_comunidade
+  for insert with check ((select auth.uid()) = autor_id and turma_id = public.minha_turma_id());
+create policy mensagens_del on public.mensagens_comunidade
+  for delete using ((select auth.uid()) = autor_id or public.sou_educador());
+
+-- ligas: membro ve a liga; qualquer um cria; o criador administra
+create policy ligas_sel on public.ligas for select using (
+  criador_id = (select auth.uid())
+  or public.sou_membro_liga(id)
+);
+create policy ligas_ins on public.ligas for insert
+  with check ((select auth.uid()) = criador_id);
+create policy ligas_upd on public.ligas for update
+  using ((select auth.uid()) = criador_id) with check ((select auth.uid()) = criador_id);
+create policy ligas_del on public.ligas for delete
+  using ((select auth.uid()) = criador_id);
+
+create policy liga_membros_sel on public.liga_membros for select using (
+  user_id = (select auth.uid())
+  or public.sou_criador_liga(liga_id)
+);
+create policy liga_membros_ins on public.liga_membros for insert
+  with check ((select auth.uid()) = user_id);
+create policy liga_membros_del on public.liga_membros for delete using (
+  user_id = (select auth.uid())
+  or public.sou_criador_liga(liga_id)
+);
+
+-- ---------------------------------------------------------------------
+-- 16. Grants
+-- ---------------------------------------------------------------------
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant select on public.ranking to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+grant execute on function public.registrar_xp(public.log_tipo, text, integer) to authenticated;
+
+-- Defesa em profundidade no XP: a RLS ja nao tem policy de escrita em
+-- gamificacao, e aqui o privilegio tambem sai. Sobra so registrar_xp().
+revoke insert, update, delete on public.gamificacao from authenticated;
+
+-- Placar e dado derivado: ninguem escreve na view.
+revoke insert, update, delete on public.ranking from authenticated;
+
+-- anon nao precisa de nada alem de autenticar
+revoke all on all tables in schema public from anon;
+
+commit;
+
+-- =====================================================================
+-- VERIFICACAO - rode depois e confira
+--
+-- (a) toda tabela com RLS ligado (rowsecurity deve ser true em todas):
+select tablename, rowsecurity
+  from pg_tables where schemaname = &#x27;public&#x27; order by tablename;
+
+-- (b) nenhuma tabela com RLS e ZERO policies (isso trava tudo em silencio):
+select t.tablename, count(p.policyname) as policies
+  from pg_tables t
+  left join pg_policies p on p.schemaname = t.schemaname and p.tablename = t.tablename
+ where t.schemaname = &#x27;public&#x27;
+ group by t.tablename having count(p.policyname) = 0;
+-- =====================================================================
+</pre>
+    </div>
+  </details>
+
+  <div class="callout">
+    <h3>Rotacione a service_role</h3>
+    <p>A chave <code class="inl">service_role</code> compartilhada no chat ignora a RLS por completo. Agora que o schema esta no ar: <strong>Settings &rarr; API &rarr; Rotate</strong>. A <code class="inl">anon</code> pode ficar &mdash; ela e publica por design, e os testes acima mostram que a RLS e quem esta segurando os dados.</p>
+  </div>
+
+</div>
+
+<script>
+  document.querySelectorAll('button.copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var pre = document.getElementById(btn.getAttribute('data-target'));
+      var rotulo = btn.textContent;
+      function feito() {
+        btn.textContent = 'Copiado';
+        btn.setAttribute('data-done', '1');
+        setTimeout(function () {
+          btn.textContent = rotulo;
+          btn.removeAttribute('data-done');
+        }, 2000);
+      }
+      function manual() {
+        var sel = window.getSelection(), r = document.createRange();
+        r.selectNodeContents(pre); sel.removeAllRanges(); sel.addRange(r);
+        btn.textContent = 'Selecionado \u2014 Ctrl+C';
+        setTimeout(function () { btn.textContent = rotulo; }, 2600);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(pre.textContent).then(feito).catch(manual);
+      } else { manual(); }
+    });
+  });
+</script>

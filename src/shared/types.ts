@@ -1,21 +1,36 @@
 // ===== Auth =====
-export type UserRole = 'student' | 'educator' | 'parent';
+// Espelha o enum papel_usuario do banco.
+export type UserRole = 'student' | 'educator' | 'parent' | 'admin' | 'psychologist';
 
+/**
+ * Perfil do usuario (tabela `perfis`).
+ *
+ * NAO existe campo de senha: a senha vive no Supabase Auth (bcrypt, no
+ * servidor) e nunca passa pelo nosso codigo alem do POST de login.
+ */
 export interface User {
-  uid: string;
+  uid: string;              // = auth.users.id
   email: string;
   nome: string;
   sobrenome?: string;
   metaEstudo?: string;
-  senha: string;
   role: UserRole;
+  escolaId?: string | null;
+  turmaId?: string | null;
 }
 
+/**
+ * Sessao ativa. Derivada do JWT + tabela `perfis`, nunca do localStorage:
+ * um objeto de sessao gravado no navegador e editavel pelo usuario, o que
+ * tornava o papel forjavel.
+ */
 export interface Session {
   uid: string;
   email: string;
   nome: string;
   role: UserRole;
+  escolaId?: string | null;
+  turmaId?: string | null;
 }
 
 export type RolePage = 'dashboard' | 'educator-dashboard' | 'parent-dashboard';
@@ -50,7 +65,8 @@ export interface MicroTask {
   id: string;
   titulo: string;
   descricao: string;
-  emoji: string;
+  /** Nome do icone no registro de AppIcon (antes era um emoji em string). */
+  icon: string;
   completed: boolean;
 }
 
@@ -121,6 +137,12 @@ export interface QuizQuestion {
   alternativas: string[];
   correta: number; // index
   explicacao: string;
+  /**
+   * Informada pela IA na geracao. Alimenta a feature "tempo demais em
+   * questao facil" do modelo de fadiga - sem ela, ficar 4 minutos numa
+   * questao dificil pareceria o mesmo sintoma.
+   */
+  dificuldade?: Dificuldade;
 }
 
 export interface QuizResult {
@@ -253,10 +275,215 @@ export interface CommunityChatFilter {
 }
 
 // ===== Tab Navigation =====
-export type TabId = 'dashboard' | 'chat' | 'essay' | 'notebook' | 'quiz' | 'profile' | 'ranking' | 'foco' | 'comunidade' | 'store';
+export type TabId =
+  | 'dashboard' | 'chat' | 'essay' | 'notebook' | 'quiz' | 'profile' | 'ranking'
+  | 'foco' | 'comunidade' | 'store'
+  // Modulo de bem-estar (migracoes 010/011)
+  | 'escudo' | 'audio' | 'calendario' | 'cuidado';
 
 export interface Tab {
   id: TabId;
   label: string;
   icon: string;
+}
+
+// =====================================================================
+// Modulo de bem-estar, marketplace e foco offline (migracoes 010/011)
+// =====================================================================
+
+// ===== Marketplace de psicologos =====
+export interface Psicologo {
+  id: string;
+  nome: string;
+  crp: string;
+  bio: string;
+  especialidades: string[];
+  abordagem: string;
+  valorCentavos: number;
+  duracaoMinutos: number;
+  fotoUrl?: string | null;
+  aceitaNovos: boolean;
+  notaMedia: number;
+  totalAtendimentos: number;
+}
+
+/** Janela semanal recorrente declarada pelo profissional. */
+export interface JanelaDisponibilidade {
+  diaSemana: number; // 0 = domingo
+  horaInicio: string; // "14:00"
+  horaFim: string; // "20:00"
+}
+
+/** Horario concreto oferecido ao responsavel, derivado das janelas. */
+export interface SlotAgenda {
+  inicio: string; // ISO
+  fim: string; // ISO
+}
+
+export type StatusPagamento = 'pendente' | 'pago' | 'reembolsado' | 'falhou' | 'isento';
+export type StatusAgendamento = 'agendado' | 'confirmado' | 'concluido' | 'cancelado' | 'no_show';
+export type ProvedorSala = 'jitsi' | 'google_meet' | 'zoom' | 'manual';
+
+export interface Agendamento {
+  id: string;
+  alunoId: string;
+  alunoNome?: string;
+  responsavelId?: string | null;
+  psicologoId: string;
+  psicologoNome?: string;
+  alertaId?: string | null;
+  inicio: string; // ISO
+  fim: string; // ISO
+  duracaoMinutos: number;
+  meetingUrl?: string | null;
+  meetingProvider: ProvedorSala;
+  valorCentavos: number;
+  statusPagamento: StatusPagamento;
+  status: StatusAgendamento;
+}
+
+export type SeveridadeAlerta = 'info' | 'atencao' | 'alto' | 'critico';
+export type StatusAlerta = 'aberto' | 'visto' | 'em_atendimento' | 'resolvido';
+
+export interface AlertaSaudeMental {
+  id: string;
+  alunoId: string;
+  alunoNome?: string;
+  tipo: string; // burnout | ssc | humor | evasao | madrugada
+  severidade: SeveridadeAlerta;
+  score: number;
+  gatilho: Record<string, unknown>;
+  mensagem: string;
+  status: StatusAlerta;
+  criadoEm: string;
+}
+
+export type StatusVinculo = 'pendente' | 'ativo' | 'recusado' | 'revogado';
+
+export interface VinculoResponsavel {
+  id: string;
+  responsavelId: string;
+  alunoId: string;
+  alunoNome?: string;
+  responsavelNome?: string;
+  parentesco: string;
+  status: StatusVinculo;
+  criadoEm: string;
+}
+
+export interface Notificacao {
+  id: string;
+  canal: 'email' | 'push' | 'in_app';
+  tipo: string;
+  titulo: string;
+  corpo: string;
+  payload: Record<string, unknown>;
+  lida: boolean;
+  criadoEm: string;
+}
+
+// ===== Escudo de dopamina =====
+export type ModoEscudo = 'leve' | 'enem' | 'maratona';
+
+export interface SessaoOffline {
+  id?: number;
+  inicio: string; // ISO
+  fim: string; // ISO
+  minutosOffline: number;
+  interrupcoes: number;
+  modo: ModoEscudo;
+  moedasCreditadas: number;
+}
+
+export interface CarteiraFoco {
+  saldo: number;
+  totalGanho: number;
+  totalGasto: number;
+}
+
+// ===== Telemetria e burnout =====
+export type Dificuldade = 'facil' | 'media' | 'dificil';
+
+export interface EventoTelemetria {
+  questionId: string;
+  materia: string;
+  dificuldade: Dificuldade;
+  tempoGastoSegundos: number;
+  acertou: boolean;
+  horaLocal: number; // 0-23
+  timestamp: number;
+}
+
+export type ClasseBurnout = 'saudavel' | 'alerta' | 'fadiga' | 'esgotamento';
+
+export interface IndiceBurnout {
+  data: string; // YYYY-MM-DD
+  score: number; // 0-100
+  classe: ClasseBurnout;
+  features: Record<string, number>;
+}
+
+// ===== Pilulas de audio =====
+export interface ModuloAudio {
+  id: string;
+  materia: string;
+  topico: string;
+  titulo: string;
+  resumo: string;
+  roteiro: string;
+  audioUrl?: string | null;
+  duracaoSegundos: number;
+  voz: string;
+}
+
+export interface ProgressoAudio {
+  moduloId: string;
+  segundosOuvidos: number;
+  concluido: boolean;
+}
+
+// ===== Revisao espacada (Ebbinghaus / SRS) =====
+export interface RevisaoEspacada {
+  id?: number;
+  topicoId: string;
+  topicoNome: string;
+  materia: string;
+  nivelMemoria: number; // 0-5
+  intervaloDias: number;
+  facilidade: number; // 1.3 - 3.0
+  ultimaNota?: number;
+  revisoesFeitas: number;
+  proximaRevisao: string; // YYYY-MM-DD
+  ultimaRevisao?: string | null;
+}
+
+// ===== Intervencoes da IA =====
+export interface IntervencaoIA {
+  id?: number;
+  tipo: 'doomscroll' | 'burnout' | 'madrugada';
+  mensagem: string;
+  gatilho: Record<string, unknown>;
+  aceita?: boolean | null;
+  criadoEm?: string;
+}
+
+// ===== Relatorio de descompressao =====
+export interface RelatorioSemanal {
+  id?: number;
+  semanaInicio: string; // YYYY-MM-DD (segunda-feira)
+  textoGerado: string;
+  metricas: MetricasDescompressao;
+  lido: boolean;
+}
+
+export interface MetricasDescompressao {
+  diasAtivos: number;
+  minutosOffline: number;
+  minutosFoco: number;
+  horasSonoMedia: number;
+  questoesRespondidas: number;
+  taxaAcerto: number;
+  streak: number;
+  sessoesMadrugada: number;
+  revisoesEmDia: number;
 }

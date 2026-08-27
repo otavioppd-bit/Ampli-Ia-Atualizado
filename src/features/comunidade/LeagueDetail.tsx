@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import { SendHorizontal, Sparkles, Users } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
-import { IconSend, IconSparkles, IconUsersGroup } from '../../shared/ui/Icons';
 import type { StudyLeague, StudyLeagueMessage } from '../../shared/lib/ligasEngine';
 import { postLeagueMessage } from '../../shared/lib/ligasEngine';
 
@@ -44,7 +44,7 @@ function generateDailyPrompt(league: StudyLeague): string {
       'Explique o princípio de conservação de energia em uma queda livre.',
     ],
     Química: [
-      'Balanceie a equação: Fe + O₂ → Fe₂O₃ e identifique o tipo de reação.',
+      'Balanceie a equação: Fe + O₂  Fe₂O₃ e identifique o tipo de reação.',
       'Calcule o pH de uma solução de HCl 0,001 mol/L.',
       'Diferencie ligações iônicas, covalentes e metálicas com exemplos.',
     ],
@@ -123,7 +123,7 @@ export function LeagueDetail({ league, onBack, onUpdateLeague }: LeagueDetailPro
           <div className="min-w-0">
             <h1 className="text-base md:text-lg font-bold text-white truncate">{league?.title || 'Sala'}</h1>
             <p className="text-xs text-gray-500">
-              <IconUsersGroup size={12} className="inline mr-1" />
+              <Users size={12} className="inline mr-1" />
               {participanteCount} participante{participanteCount !== 1 ? 's' : ''} • {league?.escola || ''}
             </p>
           </div>
@@ -133,7 +133,7 @@ export function LeagueDetail({ league, onBack, onUpdateLeague }: LeagueDetailPro
 
       {/* Content: Chat + Challenge */}
       <div className="flex-1 flex flex-col lg:flex-row gap-3 overflow-hidden min-h-0">
-        {/* Chat Panel — WhatsApp style */}
+        {/* Chat Panel - WhatsApp style */}
         <div className="flex-1 flex flex-col glass rounded-2xl overflow-hidden min-h-0">
           <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/[0.04]">
             <h2 className="text-sm font-semibold text-white">Chat da Liga</h2>
@@ -142,8 +142,7 @@ export function LeagueDetail({ league, onBack, onUpdateLeague }: LeagueDetailPro
 
           <div className="flex-1 overflow-y-auto p-4 flex flex-col space-y-3 scroll-smooth">
             {messages.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-                Nenhuma mensagem ainda. Seja o primeiro a contribuir!
+              <div className="flex-1 flex items-center justify-center text-sm text-gray-500"> Nenhuma mensagem ainda. Seja o primeiro a contribuir!
               </div>
             ) : (
               messages.map(msg => {
@@ -199,7 +198,7 @@ export function LeagueDetail({ league, onBack, onUpdateLeague }: LeagueDetailPro
               disabled={!message.trim() || sending}
               className="h-11 w-11 flex items-center justify-center rounded-full bg-emerald-500 text-white disabled:opacity-30 hover:brightness-110 transition-all shrink-0 shadow-lg shadow-emerald-500/20"
             >
-              <IconSend size={18} />
+              <SendHorizontal size={18} />
             </button>
           </div>
         </div>
@@ -208,7 +207,7 @@ export function LeagueDetail({ league, onBack, onUpdateLeague }: LeagueDetailPro
         <div className="lg:w-72 flex flex-col gap-3">
           <div className="glass rounded-2xl p-4">
             <div className="flex items-center gap-2 mb-3">
-              <IconSparkles size={16} className="text-amber-400" />
+              <Sparkles size={16} className="text-amber-400" />
               <h2 className="text-sm font-semibold text-white">Desafio da Liga</h2>
             </div>
             <p className="text-sm text-gray-300 leading-relaxed mb-3">{dailyPrompt}</p>

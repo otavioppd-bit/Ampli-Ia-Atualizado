@@ -1,5 +1,5 @@
 // =========================================================
-// MOTOR DE PREDIÇÃO DE EVASÃO — Regressão Linear em JS puro
+// MOTOR DE PREDIÇÃO DE EVASÃO - Regressão Linear em JS puro
 // Recebe o histórico mensal do estudante (notas + tempo de
 // uso do app) e projeta os próximos 4 meses via reta de
 // mínimos quadrados.
@@ -7,8 +7,8 @@
 
 export interface StudentMonthlyRecord {
   month: string; // "YYYY-MM"
-  notaMedia: number; // 0-100 — desempenho escolar médio do mês
-  tempoUso: number; // horas totais de uso do app no mês
+  notaMedia: number; // 0-100: desempenho escolar medio do mes
+  tempoUso: number; // horas totais de uso do app no mes
 }
 
 export interface LinearFit {
@@ -89,16 +89,22 @@ export function linearRegression(data: { x: number; y: number }[]): LinearFit {
 /**
  * Calcula a projeção cognitiva de evasão para os próximos 4 meses.
  *
- * 1) Regressão linear sobre as notas do histórico → reta de tendência.
+ * 1) Regressão linear sobre as notas do histórico reta de tendência.
  * 2) Projeta os próximos 4 meses sobre essa reta (t = n..n+3).
  * 3) Converte inclinação + nível atual + engajamento em um score 0-100
- *    e deriva o status de risco (verde/amarelo/vermelho).
+ * e deriva o status de risco (verde/amarelo/vermelho).
  */
 export function calculateDropoutRisk(historicalData: StudentMonthlyRecord[]): DropoutProjection {
   if (historicalData.length === 0) {
     return {
-      slope: 0, r2: 0, trend: 'stable', riskLevel: 'green', riskScore: 0,
-      currentAverage: 0, projectedAverage: 0, projection: [],
+      slope: 0,
+      r2: 0,
+      trend: 'stable',
+      riskLevel: 'green',
+      riskScore: 0,
+      currentAverage: 0,
+      projectedAverage: 0,
+      projection: [],
     };
   }
 
@@ -122,14 +128,9 @@ export function calculateDropoutRisk(historicalData: StudentMonthlyRecord[]): Dr
 
   // Componentes do score de risco
   const performancePenalty =
-    currentAverage >= 75 ? 0
-      : currentAverage >= 60 ? 15
-        : currentAverage >= 45 ? 35
-          : 60;
+    currentAverage >= 75 ? 0 : currentAverage >= 60 ? 15 : currentAverage >= 45 ? 35 : 60;
 
-  const slopePenalty = fit.slope < 0
-    ? clamp(Math.abs(fit.slope) * 12, 0, 50)
-    : -clamp(fit.slope * 10, 0, 20);
+  const slopePenalty = fit.slope < 0 ? clamp(Math.abs(fit.slope) * 12, 0, 50) : -clamp(fit.slope * 10, 0, 20);
 
   // Engajamento: queda rápida no tempo de uso reforça o sinal de risco
   const engagementPoints = historicalData.map((d, i) => ({ x: i, y: d.tempoUso }));

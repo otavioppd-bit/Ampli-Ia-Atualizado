@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { Brain, Camera, Mic, SendHorizontal, Sparkles, Users, Volume2, VolumeX } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { searchKB, matchSubject, extractKeywords, SPECIAL_RESPONSES, buildKBFromQuiz } from '../../shared/lib/kbSearch';
 import { getEmpathicPrefix } from '../../shared/lib/emotionEngine';
@@ -7,9 +8,10 @@ import { ENEM_KB } from '../../shared/lib/kbEnem';
 import { sendMessageToGemini, aiAvailable } from '../../shared/lib/aiService';
 import { ChatMessage, Nota, ChatPersona } from '../../shared/types';
 import { playClick, speak, stopSpeech } from '../../shared/lib/sfx';
-import { LAST_SUBJECT, buildContextGreeting } from '../../shared/lib/contextMemory';
+import { buildContextGreeting, ultimaMateria } from '../../shared/lib/contextMemory';
 import { PersonaManager } from '../../shared/ui/PersonaManager';
-import { IconSend, IconMic, IconCamera, IconVolume, IconVolumeOff, IconUsers, IconSparkles, IconBrain } from '../../shared/ui/Icons';
+import { AppIcon } from '../../shared/ui/AppIcon';
+import { TextoFormatado } from '../../shared/ui/TextoFormatado';
 
 const QUIZ_KB = buildKBFromQuiz(QUIZ_BANK);
 const ALL_KB = [...ENEM_KB, ...QUIZ_KB];
@@ -42,16 +44,16 @@ function getBotReply(userMessage: string, mood: string, persona: ChatPersona | n
   const subject = matchSubject(userMessage);
   if (isMentor && subject) {
     const dicas: Record<string, string> = {
-      Matemática: '📐 Pratique exercícios de lógica e revisão de fórmulas. Foco em razão, proporção e funções.',
-      Português: '📝 Revise concordância verbal e nominal, regência e crase. Leia os enunciados com atenção.',
-      História: '📜 Contextualize eventos em ordem cronológica. Destaque para Brasil Colônia, Império e Era Vargas.',
-      Geografia: '🌍 Questões de geografia política, ambiental e urbana são frequentes. Atente-se a mapas.',
-      Biologia: '🧬 Fisiologia humana, ecologia e genética são os temas mais cobrados.',
-      Física: '⚡ Mecânica, termologia e ondas são tópicos principais. Foco em interpretação de gráficos.',
-      Química: '🧪 Estequiometria, soluções e oxirredução são recorrentes. Pratique cálculos.',
-      Filosofia: '🤔 Conheça os principais filósofos e suas ideias centrais (Sócrates, Descartes, Nietzsche).',
+      Matemática: ' Pratique exercícios de lógica e revisão de fórmulas. Foco em razão, proporção e funções.',
+      Português: ' Revise concordância verbal e nominal, regência e crase. Leia os enunciados com atenção.',
+      História: ' Contextualize eventos em ordem cronológica. Destaque para Brasil Colônia, Império e Era Vargas.',
+      Geografia: ' Questões de geografia política, ambiental e urbana são frequentes. Atente-se a mapas.',
+      Biologia: ' Fisiologia humana, ecologia e genética são os temas mais cobrados.',
+      Física: ' Mecânica, termologia e ondas são tópicos principais. Foco em interpretação de gráficos.',
+      Química: ' Estequiometria, soluções e oxirredução são recorrentes. Pratique cálculos.',
+      Filosofia: ' Conheça os principais filósofos e suas ideias centrais (Sócrates, Descartes, Nietzsche).',
       Inglês: '🇬🇧 Foco em interpretação de texto e vocabulário. Palavras cognatas ajudam muito.',
-      Sociologia: '🏛️ Trabalho, cultura, cidadania e movimentos sociais são temas frequentes.',
+      Sociologia: ' Trabalho, cultura, cidadania e movimentos sociais são temas frequentes.',
     };
     const prefix = getEmpathicPrefix(mood as any);
     return prefix ? `${prefix}\n\n${dicas[subject] || `Sobre ${subject}: revise os fundamentos e pratique questões.`}` : (dicas[subject] || `Sobre ${subject}: revise os fundamentos e pratique questões.`);
@@ -62,7 +64,7 @@ function getBotReply(userMessage: string, mood: string, persona: ChatPersona | n
     const fallback = `Não encontrei informações específicas sobre "${keywords.join(', ') || 'isso'}" na minha base. ${persona.instruction.length > 60 ? `Minha especialidade: ${persona.instruction.slice(0, 100)}...` : `Minha especialidade: ${persona.instruction}`} Que tal reformular dentro da minha área?`;
     return prefix ? `${prefix}\n\n${fallback}` : fallback;
   }
-  const fallback = `Hmm, não encontrei informações sobre "${keywords.join(', ') || 'isso'}" na minha base local. 🧐 Tente reformular sua pergunta ou explore as seções Quiz, Redação e Caderno de Estudos!`;
+  const fallback = `Hmm, não encontrei informações sobre "${keywords.join(', ') || 'isso'}" na minha base local.  Tente reformular sua pergunta ou explore as seções Quiz, Redação e Caderno de Estudos!`;
   return prefix ? `${prefix}\n\n${fallback}` : fallback;
 }
 
@@ -89,8 +91,9 @@ function autoResize(el: HTMLTextAreaElement) {
 }
 
 export function ChatPage() {
-  const { chatMessages, addChatMessage, detectAndSetMood, isMuted, setIsMuted, notas, setNotas, setToast,
-    personas, activePersonaId, setActivePersonaId, setShowPersonaManager, apiKey } = useAppStore();
+  const { chatMessages, addChatMessage, detectAndSetMood, isMuted, setIsMuted, addNota, setToast,
+    personas, activePersonaId, setActivePersonaId, setShowPersonaManager, apiKey,
+    quizResults, logs } = useAppStore();
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -103,24 +106,34 @@ export function ChatPage() {
 
   const activePersona = useMemo(() => personas.find(p => p.id === activePersonaId) || null, [personas, activePersonaId]);
 
+  /* Materia retomada: sai do historico real do aluno (ultimo quiz, depois
+     registros de atividade) e so cai na persona como ultimo recurso. */
+  const materiaRetomada = useMemo(
+    () => ultimaMateria({ quizResults, logs, persona: activePersona }),
+    [quizResults, logs, activePersona],
+  );
+
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
+  const saudacaoEnviada = useRef(false);
+
   useEffect(() => {
-    if (chatMessages.length === 0) {
-      const saved = localStorage.getItem('mm_chat_messages');
-      if (saved) {
-        try { useAppStore.getState().setChatMessages(JSON.parse(saved)); } catch { }
-        return;
-      }
-      // Memória de contexto: abre o chat retomando a última matéria estudada
+    // O historico ja foi carregado do banco no boot (App.tsx). Se mesmo
+    // assim estiver vazio, e a primeira conversa: monta a saudacao.
+    //
+    // A guarda por ref existe porque o StrictMode roda o efeito duas vezes
+    // em desenvolvimento e o estado ainda nao atualizou entre as duas
+    // chamadas: sem ela, a saudacao aparecia repetida E era gravada duas
+    // vezes no banco.
+    if (chatMessages.length === 0 && !saudacaoEnviada.current) {
+      saudacaoEnviada.current = true;
       const greeting: ChatMessage = {
         id: generateId(),
         role: 'assistant',
-        text: buildContextGreeting(LAST_SUBJECT),
+        text: buildContextGreeting(materiaRetomada),
         timestamp: Date.now(),
       };
       addChatMessage(greeting);
-      persistMessages([greeting]);
     }
   }, []);
 
@@ -128,15 +141,12 @@ export function ChatPage() {
     if (inputRef.current) autoResize(inputRef.current);
   }, [input]);
 
-  function persistMessages(msgs: ChatMessage[]) { localStorage.setItem('mm_chat_messages', JSON.stringify(msgs)); }
-
   const handleSend = useCallback(async (text: string, image?: string) => {
     if (!text.trim() && !image) return;
     playClick();
     const userMsg: ChatMessage = { id: generateId(), role: 'user', text: text.trim(), timestamp: Date.now(), image };
     const newMsgs = [...chatMessages, userMsg];
     addChatMessage(userMsg);
-    persistMessages(newMsgs);
     setInput('');
     if (inputRef.current) { inputRef.current.style.height = 'auto'; }
     const mood = await detectAndSetMood(text);
@@ -155,7 +165,6 @@ export function ChatPage() {
         );
         const botMsg: ChatMessage = { id: generateId(), role: 'assistant', text: reply, timestamp: Date.now(), mood };
         addChatMessage(botMsg);
-        persistMessages([...newMsgs, botMsg]);
         if (!isMuted) { stopSpeech(); speak(reply); }
       } catch (err: any) {
         if (err.name !== 'AbortError') {
@@ -163,7 +172,6 @@ export function ChatPage() {
           const fallback = getBotReply(text, mood, activePersona);
           const botMsg: ChatMessage = { id: generateId(), role: 'assistant', text: fallback, timestamp: Date.now(), mood };
           addChatMessage(botMsg);
-          persistMessages([...newMsgs, botMsg]);
           if (!isMuted) { stopSpeech(); speak(fallback); }
         }
       }
@@ -173,7 +181,6 @@ export function ChatPage() {
         const reply = getBotReply(text, mood, activePersona);
         const botMsg: ChatMessage = { id: generateId(), role: 'assistant', text: reply, timestamp: Date.now(), mood };
         addChatMessage(botMsg);
-        persistMessages([...newMsgs, botMsg]);
         if (!isMuted) { stopSpeech(); speak(reply); }
       }, 400 + Math.random() * 600);
     }
@@ -225,56 +232,64 @@ export function ChatPage() {
 
   function saveToNotebook(msg: ChatMessage) {
     const text = msg.image ? `[Imagem] ${msg.text || 'Foto de lição'}` : msg.text;
-    const newNota: Nota = { id: `nota_${Date.now()}`, text, data: new Date().toISOString(), tag: 'chat' };
-    const updated = [...notas, newNota];
-    setNotas(updated);
-    localStorage.setItem('mm_notas', JSON.stringify(updated));
+    // addNota persiste no banco e troca o id provisorio pelo definitivo.
+    addNota({ id: `tmp_${Date.now()}`, text, data: new Date().toISOString(), tag: 'chat' });
     setToast('Salva no Caderno!', 'success');
   }
 
   return (
     <div className="flex flex-col h-[calc(100dvh-10rem)] md:h-[calc(100dvh-8rem)] animate-fade-up">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2 mb-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-all"
+            className="w-11 h-11 rounded-xl flex items-center justify-center shadow-sm transition-all"
             style={{ backgroundColor: activePersona ? activePersona.color + '20' : '#f59e0b20' }}
           >
-            <IconBrain size={20} style={{ color: activePersona?.color || '#f59e0b' }} />
+            <Brain size={20} style={{ color: activePersona?.color || '#f59e0b' }} />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg md:text-xl font-bold text-white">{activePersona?.name || 'Mentor IA'}</h1>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="text-lg md:text-xl font-bold text-white truncate">{activePersona?.name || 'Mentor'}</h1>
+              {/* Antes era um selo "brilho + IA", exatamente o clichê que a
+                  regra 5 proibe. O que interessa ao aluno nao e a
+                  tecnologia, e se o mentor esta disponivel agora. */}
               {aiAvailable(apiKey) && (
-                <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/15 flex items-center gap-1">
-                  <IconSparkles size={10} /> IA
+                <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/15 flex items-center gap-1.5 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 motion-safe:animate-pulse-subtle" />
+                  online
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 truncate">
               {getSubjectName(activePersona)}
-              <span className="text-gray-600"> · </span>
-              <span className="text-violet-400/90">🧠 retomando: {LAST_SUBJECT}</span>
+              {materiaRetomada && (
+                <>
+                  <span className="text-gray-600"> · </span>
+                  <span className="text-violet-400/90">
+                    <Brain size={13} className="inline-block align-[-0.15em] text-violet-400" /> retomando: {materiaRetomada}
+                  </span>
+                </>
+              )}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => setShowPersonaManager(true)}
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all"
+            className="w-11 h-11 flex items-center justify-center rounded-xl text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all"
             title="Gerenciar Personas"
           >
-            <IconUsers size={18} />
+            <Users size={18} />
           </button>
           <button
             onClick={() => { setIsMuted(!isMuted); if (!isMuted) stopSpeech(); }}
-            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all ${
+            className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all ${
               isMuted ? 'text-red-400 hover:bg-red-500/10' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
             }`}
             title={isMuted ? 'Som ativado' : 'Som desativado'}
           >
-            {isMuted ? <IconVolumeOff size={18} /> : <IconVolume size={18} />}
+            {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
           </button>
         </div>
       </div>
@@ -287,14 +302,14 @@ export function ChatPage() {
             <button
               key={p.id}
               onClick={() => setActivePersonaId(p.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all shrink-0 ${
+              className={`flex items-center gap-2 px-3 py-2 min-h-[44px] rounded-xl text-xs font-medium whitespace-nowrap transition-all shrink-0 ${
                 isActive
                   ? 'text-white shadow-sm border'
                   : 'text-gray-400 hover:text-gray-200 bg-white/[0.02] border border-white/5'
               }`}
               style={isActive ? { backgroundColor: p.color + '18', borderColor: p.color + '35' } : {}}
             >
-              <span className="text-lg">{p.icon}</span>
+              <AppIcon name={p.icon} size={17} className="text-amber-300" />
               <span className="font-semibold">{p.name}</span>
               {isActive && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: p.color }} />}
             </button>
@@ -302,7 +317,7 @@ export function ChatPage() {
         })}
         <button
           onClick={() => setShowPersonaManager(true)}
-          className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium text-gray-500 hover:text-gray-300 bg-white/[0.02] border border-white/5 border-dashed shrink-0"
+          className="flex items-center gap-1 px-3 py-2 min-h-[44px] rounded-xl text-xs font-medium text-gray-500 hover:text-gray-300 bg-white/[0.02] border border-white/5 border-dashed shrink-0"
         >
           + Nova
         </button>
@@ -316,7 +331,7 @@ export function ChatPage() {
               className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-sm"
               style={{ backgroundColor: activePersona ? activePersona.color + '12' : '#f59e0b12' }}
             >
-              <IconBrain size={32} style={{ color: activePersona?.color || '#f59e0b' }} />
+              <Brain size={32} style={{ color: activePersona?.color || '#f59e0b' }} />
             </div>
             <p className="text-gray-400 font-medium">
               {activePersona ? `Fale com ${activePersona.name}` : 'Comece uma conversa!'}
@@ -325,14 +340,11 @@ export function ChatPage() {
               {activePersona ? activePersona.instruction.slice(0, 100) + '...' : 'Pergunte sobre matérias, dicas de estudo, ou desabafe.'}
             </p>
             <div className="flex gap-2 mt-5">
-              <button onClick={() => handleSend('Dicas de estudo para o ENEM')} className="btn-secondary text-xs px-4 py-2">
-                💡 Dicas ENEM
+              <button onClick={() => handleSend('Dicas de estudo para o ENEM')} className="btn-secondary text-xs px-4 py-2"> Dicas ENEM
               </button>
-              <button onClick={() => handleSend('Como fazer uma redação nota 1000?')} className="btn-secondary text-xs px-4 py-2">
-                ✍️ Redação
+              <button onClick={() => handleSend('Como fazer uma redação nota 1000?')} className="btn-secondary text-xs px-4 py-2"> Redação
               </button>
-              <button onClick={() => handleSend('Matemática básica para o ENEM')} className="btn-secondary text-xs px-4 py-2">
-                📐 Matemática
+              <button onClick={() => handleSend('Matemática básica para o ENEM')} className="btn-secondary text-xs px-4 py-2"> Matemática
               </button>
             </div>
           </div>
@@ -345,7 +357,7 @@ export function ChatPage() {
             onMouseLeave={() => setHoveredMsg(null)}
           >
             <div
-              className={`max-w-[88%] md:max-w-[72%] rounded-2xl p-4 ${
+              className={`max-w-[88%] md:max-w-[72%] min-w-0 rounded-2xl p-4 ${
                 msg.role === 'user'
                   ? 'bg-gradient-to-br from-amber-500/15 to-orange-600/10 border border-amber-500/10'
                   : `glass border-l-4 ${personaBorderColors[activePersonaId || 'mentor_enem'] || 'border-l-amber-500/50'}`
@@ -356,7 +368,9 @@ export function ChatPage() {
                   <img src={msg.image} alt="Foto" className="w-full h-auto max-h-64 object-cover" />
                 </div>
               )}
-              {msg.text && <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{msg.text}</p>}
+              {msg.text && (
+                <TextoFormatado texto={msg.text} className="text-sm text-gray-200 leading-relaxed" />
+              )}
               <div className="flex items-center justify-between mt-3">
                 <span className="text-[10px] text-gray-600">{new Date(msg.timestamp).toLocaleTimeString()}</span>
                 <button
@@ -368,7 +382,7 @@ export function ChatPage() {
                   }`}
                   title="Salvar no Caderno"
                 >
-                  📓
+                  
                 </button>
               </div>
             </div>
@@ -377,7 +391,7 @@ export function ChatPage() {
         {isGenerating && (
           <div className="flex justify-start animate-slide-up">
             <div className="glass border-l-4 border-l-amber-500/50 rounded-2xl px-4 py-3 flex items-center gap-2.5">
-              <img
+              <img loading="lazy"
                 src="/assets/sagui_estudando_2.png"
                 alt="Sagui digitando"
                 draggable={false}
@@ -422,17 +436,16 @@ export function ChatPage() {
         />
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all relative group shrink-0"
+          className="w-11 h-11 flex items-center justify-center rounded-xl text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all relative group shrink-0"
           title="Tirar foto"
         >
-          <IconCamera size={18} />
-          <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-[10px] text-gray-300 px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-            Foto
+          <Camera size={18} />
+          <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-[10px] text-gray-300 px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none"> Foto
           </span>
         </button>
         <button
           onClick={handleVoice}
-          className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all relative group shrink-0 ${
+          className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all relative group shrink-0 ${
             isListening
               ? 'bg-red-500/15 text-red-400 shadow-[0_0_16px_rgba(239,68,68,0.2)]'
               : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
@@ -440,9 +453,9 @@ export function ChatPage() {
           title={isListening ? 'Gravando...' : 'Voz'}
         >
           {isListening ? (
-            <IconMic size={18} className="animate-pulse" />
+            <Mic size={18} className="animate-pulse" />
           ) : (
-            <IconMic size={18} />
+            <Mic size={18} />
           )}
           <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-[10px] text-gray-300 px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
             {isListening ? 'Gravando...' : 'Voz'}
@@ -453,7 +466,7 @@ export function ChatPage() {
           disabled={!input.trim()}
           className="h-10 w-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-gray-900 font-bold shadow-[0_4px_14px_rgba(245,158,11,0.25)] hover:shadow-[0_6px_20px_rgba(245,158,11,0.35)] hover:brightness-110 active:brightness-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:brightness-100 shrink-0"
         >
-          <IconSend size={16} />
+          <SendHorizontal size={16} />
         </button>
       </div>
 

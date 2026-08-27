@@ -1,13 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { SendHorizontal } from 'lucide-react';
 import { searchKB, matchSubject, extractKeywords, SPECIAL_RESPONSES, buildKBFromQuiz } from '../lib/kbSearch';
 import { getEmpathicPrefix } from '../lib/emotionEngine';
 import { QUIZ_BANK } from '../lib/quizBank';
 import { ENEM_KB } from '../lib/kbEnem';
-import { LAST_SUBJECT } from '../lib/contextMemory';
+import { ultimaMateria } from '../lib/contextMemory';
+import { useAppStore } from '../../stores/appStore';
 
 const CHAT_KB = [...ENEM_KB, ...buildKBFromQuiz(QUIZ_BANK)];
 
-const BOT_AVATAR = '/workspaces/Ampli-IA/ChatGPT Image 10 de ago. de 2026, 16_03_53.png';
+const BOT_AVATAR = '/assets/sagui_acenando_2.png';
 const TUTOR_AVATAR = '/assets/sagui_estudando_2.png';
 
 function generateId() {
@@ -30,23 +32,23 @@ function getReply(raw: string): string {
   const subject = matchSubject(raw);
   if (subject) {
     const dicas: Record<string, string> = {
-      Matemática: '📐 Pratique exercícios de lógica e revisão de fórmulas. Foco em razão, proporção e funções.',
-      Português: '📝 Revise concordância verbal e nominal, regência e crase. Leia os enunciados com atenção.',
-      História: '📜 Contextualize eventos em ordem cronológica. Destaque para Brasil Colônia, Império e Era Vargas.',
-      Geografia: '🌍 Questões de geografia política, ambiental e urbana são frequentes. Atente-se a mapas.',
-      Biologia: '🧬 Fisiologia humana, ecologia e genética são os temas mais cobrados.',
-      Física: '⚡ Mecânica, termologia e ondas são tópicos principais. Foco em interpretação de gráficos.',
-      Química: '🧪 Estequiometria, soluções e oxirredução são recorrentes. Pratique cálculos.',
-      Filosofia: '🤔 Conheça os principais filósofos e suas ideias centrais (Sócrates, Descartes, Nietzsche).',
+      Matemática: ' Pratique exercícios de lógica e revisão de fórmulas. Foco em razão, proporção e funções.',
+      Português: ' Revise concordância verbal e nominal, regência e crase. Leia os enunciados com atenção.',
+      História: ' Contextualize eventos em ordem cronológica. Destaque para Brasil Colônia, Império e Era Vargas.',
+      Geografia: ' Questões de geografia política, ambiental e urbana são frequentes. Atente-se a mapas.',
+      Biologia: ' Fisiologia humana, ecologia e genética são os temas mais cobrados.',
+      Física: ' Mecânica, termologia e ondas são tópicos principais. Foco em interpretação de gráficos.',
+      Química: ' Estequiometria, soluções e oxirredução são recorrentes. Pratique cálculos.',
+      Filosofia: ' Conheça os principais filósofos e suas ideias centrais (Sócrates, Descartes, Nietzsche).',
       Inglês: '🇬🇧 Foco em interpretação de texto e vocabulário. Palavras cognatas ajudam muito.',
-      Sociologia: '🏛️ Trabalho, cultura, cidadania e movimentos sociais são temas frequentes.',
+      Sociologia: ' Trabalho, cultura, cidadania e movimentos sociais são temas frequentes.',
     };
     const prefix = getEmpathicPrefix('neutral');
     return prefix ? `${prefix}\n\n${dicas[subject] || `Sobre ${subject}: revise os fundamentos e pratique questões.`}` : (dicas[subject] || `Sobre ${subject}: revise os fundamentos e pratique questões.`);
   }
   const kw = extractKeywords(raw);
   const prefix = getEmpathicPrefix('neutral');
-  const fallback = `Hmm, não encontrei informações sobre "${kw.join(', ') || 'isso'}" na minha base local. 🧐 Tente reformular sua pergunta!`;
+  const fallback = `Hmm, não encontrei informações sobre "${kw.join(', ') || 'isso'}" na minha base local.  Tente reformular sua pergunta!`;
   return prefix ? `${prefix}\n\n${fallback}` : fallback;
 }
 
@@ -55,6 +57,14 @@ const SUGGESTIONS = ['Como estudar para o ENEM?', 'O que é a TRI?', 'Dicas de r
 type ChatMessage = { id: string; from: 'user' | 'bot'; text: string };
 
 export function AssistantWidget() {
+  /* Mesma regra do chat: a materia sai do historico real, e quando nao ha
+     historico o texto convida em vez de inventar um assunto. */
+  const quizResults = useAppStore(st => st.quizResults);
+  const logs = useAppStore(st => st.logs);
+  const materiaRetomada = useMemo(
+    () => ultimaMateria({ quizResults, logs }),
+    [quizResults, logs],
+  );
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -134,7 +144,7 @@ export function AssistantWidget() {
                 className="ml-auto w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all text-lg"
                 aria-label="Fechar chat"
               >
-                ✕
+                
               </button>
             </div>
 
@@ -143,9 +153,16 @@ export function AssistantWidget() {
               {messages.length === 0 && (
                 <div className="text-center py-6">
                   <img src={TUTOR_AVATAR} alt="" className="w-16 h-16 object-cover rounded-2xl mx-auto mb-3" />
-                  <p className="text-sm text-gray-300">Olá! Sou o Sagui do Midnight Mentor 🐒</p>
+                  <p className="text-sm text-gray-300">Olá! Sou o Sagui do Midnight Mentor </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Retomamos seu estudo em <span className="text-emerald-400 font-medium">{LAST_SUBJECT}</span>. Pergunte sobre dúvidas, matérias ou o ENEM!
+                    {materiaRetomada ? (
+                      <>
+                        Retomamos seu estudo em{' '}
+                        <span className="text-emerald-400 font-medium">{materiaRetomada}</span>. Pergunte sobre dúvidas, matérias ou o ENEM.
+                      </>
+                    ) : (
+                      <>Pergunte sobre dúvidas, matérias ou o ENEM. Eu começo de onde você quiser.</>
+                    )}
                   </p>
                 </div>
               )}
@@ -204,7 +221,7 @@ export function AssistantWidget() {
                 className="w-10 h-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-gray-900 font-bold text-base hover:brightness-110 transition-all shrink-0"
                 aria-label="Enviar"
               >
-                ➤
+                <SendHorizontal size={17} />
               </button>
             </form>
           </div>

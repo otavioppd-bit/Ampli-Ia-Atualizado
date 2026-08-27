@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Wind } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { playClick } from '../../shared/lib/sfx';
 
@@ -46,7 +47,7 @@ export function CrisisOverlay() {
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-xl">
       <div className="text-center max-w-sm px-8 animate-scale-in space-y-6">
         <div className="w-36 h-36 mx-auto rounded-full bg-gradient-to-br from-amber-500/5 to-orange-600/5 border border-amber-500/20 flex items-center justify-center animate-breathe shadow-[0_0_60px_rgba(245,158,11,0.05)]">
-          <span className="text-5xl">{phase === 'inicio' ? '😰' : phase === 'respirando' ? '🧘' : '💪'}</span>
+          <span className="text-5xl">{phase === 'inicio' ? '' : phase === 'respirando' ? '' : ''}</span>
         </div>
 
         {phase === 'inicio' && (
@@ -56,7 +57,7 @@ export function CrisisOverlay() {
               <p className="text-sm text-gray-400 leading-relaxed">Seu índice de estresse está alto. Que tal uma pausa?</p>
             </div>
             <div className="flex flex-col gap-3">
-              <button onClick={() => { startBreathing(); playClick(); }} className="btn-primary w-full">🧘 Respiração Guiada 4-7-8</button>
+              <button onClick={() => { startBreathing(); playClick(); }} className="btn-primary w-full"><Wind size={16} className="inline-block align-[-0.15em] text-cyan-400" /> Respiração Guiada 4-7-8</button>
               <button onClick={() => { setShowCrisisOverlay(false); playClick(); }} className="btn-secondary w-full">Estou melhor agora</button>
             </div>
           </div>
@@ -66,9 +67,9 @@ export function CrisisOverlay() {
           <div className="space-y-5">
             <div className="space-y-2">
               <h2 className="text-xl font-bold text-white">
-                {breathPhase === 'inspira' && 'Inspire 🌬️'}
-                {breathPhase === 'segura' && 'Segure 🤫'}
-                {breathPhase === 'expira' && 'Expire 😮‍💨'}
+                {breathPhase === 'inspira' && 'Inspire '}
+                {breathPhase === 'segura' && 'Segure '}
+                {breathPhase === 'expira' && 'Expire ‍'}
               </h2>
               <p className="text-6xl font-extrabold text-amber-400 tabular-nums animate-pulse-subtle">{timeLeft}</p>
               <p className="text-xs text-gray-600">Siga o ritmo da respiração</p>
@@ -86,7 +87,7 @@ export function CrisisOverlay() {
               <p className="text-sm text-gray-400 leading-relaxed">Espero que esteja se sentindo melhor. Respire fundo sempre que precisar.</p>
             </div>
             <div className="flex flex-col gap-3">
-              <button onClick={() => { setShowCrisisOverlay(false); playClick(); }} className="btn-primary w-full">Sim, estou melhor 🙌</button>
+              <button onClick={() => { setShowCrisisOverlay(false); playClick(); }} className="btn-primary w-full">Sim, estou melhor </button>
               <button onClick={startBreathing} className="btn-secondary w-full">Repetir respiração</button>
             </div>
           </div>

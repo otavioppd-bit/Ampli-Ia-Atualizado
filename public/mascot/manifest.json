@@ -1,0 +1,135 @@
+{
+  "canvas": 512,
+  "faceHeight": 132,
+  "anchor": [
+    256,
+    200
+  ],
+  "frames": {
+    "acenando": {
+      "faceH_src": 316.5,
+      "scale": 0.417,
+      "src": "public/mascot/raw/acenando.png"
+    },
+    "aprovacao": {
+      "faceH_src": 325.3,
+      "scale": 0.406,
+      "src": "public/mascot/raw/aprovacao.png"
+    },
+    "estudando": {
+      "faceH_src": 240.8,
+      "scale": 0.548,
+      "src": "public/mascot/raw/estudando.png"
+    },
+    "meditando": {
+      "faceH_src": 366.2,
+      "scale": 0.36,
+      "src": "public/mascot/raw/meditando.png"
+    },
+    "pulando": {
+      "faceH_src": 318.1,
+      "scale": 0.415,
+      "src": "public/mascot/raw/pulando.png"
+    },
+    "pose_01": {
+      "faceH_src": 82.0,
+      "scale": 1.61,
+      "src": "public/mascot/poses/pose_01.png"
+    },
+    "pose_02": {
+      "faceH_src": 88.0,
+      "scale": 1.5,
+      "src": "public/mascot/poses/pose_02.png"
+    },
+    "pose_03": {
+      "faceH_src": 83.0,
+      "scale": 1.59,
+      "src": "public/mascot/poses/pose_03.png"
+    },
+    "pose_04": {
+      "faceH_src": 83.0,
+      "scale": 1.59,
+      "src": "public/mascot/poses/pose_04.png"
+    },
+    "pose_05": {
+      "faceH_src": 80.0,
+      "scale": 1.65,
+      "src": "public/mascot/poses/pose_05.png"
+    },
+    "pose_06": {
+      "faceH_src": 81.0,
+      "scale": 1.63,
+      "src": "public/mascot/poses/pose_06.png"
+    },
+    "pose_07": {
+      "faceH_src": 80.0,
+      "scale": 1.65,
+      "src": "public/mascot/poses/pose_07.png"
+    },
+    "pose_08": {
+      "faceH_src": 67.0,
+      "scale": 1.65,
+      "src": "public/mascot/poses/pose_08.png"
+    },
+    "pose_09": {
+      "faceH_src": 78.0,
+      "scale": 1.692,
+      "src": "public/mascot/poses/pose_09.png"
+    },
+    "pose_10": {
+      "faceH_src": 80.0,
+      "scale": 1.65,
+      "src": "public/mascot/poses/pose_10.png"
+    },
+    "pose_11": {
+      "faceH_src": 74.0,
+      "scale": 1.784,
+      "src": "public/mascot/poses/pose_11.png"
+    },
+    "pose_12": {
+      "faceH_src": 76.0,
+      "scale": 1.737,
+      "src": "public/mascot/poses/pose_12.png"
+    },
+    "pose_13": {
+      "faceH_src": 77.0,
+      "scale": 1.714,
+      "src": "public/mascot/poses/pose_13.png"
+    },
+    "pose_14": {
+      "faceH_src": 71.0,
+      "scale": 1.65,
+      "src": "public/mascot/poses/pose_14.png"
+    },
+    "pose_15": {
+      "faceH_src": 88.0,
+      "scale": 1.5,
+      "src": "public/mascot/poses/pose_15.png"
+    },
+    "pose_16": {
+      "faceH_src": 81.0,
+      "scale": 1.63,
+      "src": "public/mascot/poses/pose_16.png"
+    },
+    "pose_17": {
+      "faceH_src": 73.0,
+      "scale": 1.808,
+      "src": "public/mascot/poses/pose_17.png"
+    },
+    "pose_18": {
+      "faceH_src": 80.0,
+      "scale": 1.65,
+      "src": "public/mascot/poses/pose_18.png"
+    },
+    "pose_19": {
+      "faceH_src": 75.0,
+      "scale": 1.76,
+      "src": "public/mascot/poses/pose_19.png"
+    },
+    "pose_20": {
+      "faceH_src": 56.0,
+      "scale": 1.65,
+      "src": "public/mascot/poses/pose_20.png"
+    }
+  }
+}

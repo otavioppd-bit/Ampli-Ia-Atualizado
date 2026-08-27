@@ -1,12 +1,42 @@
 import { useState, useEffect, useRef } from 'react';
+import { PenLine, Zap } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { Modal } from '../../shared/ui/Modal';
 import { GlassCard } from '../../shared/ui/GlassCard';
+import { AppIcon } from '../../shared/ui/AppIcon';
 import { QuizQuestion } from '../../shared/types';
 import { askGemini, aiAvailable } from '../../shared/lib/aiService';
-import mermaid from 'mermaid';
 
-mermaid.initialize({ theme: 'dark', themeVariables: { primaryColor: '#f59e0b', primaryTextColor: '#fff', primaryBorderColor: '#f59e0b33', lineColor: '#f59e0b55', fontSize: '14px' } });
+/*
+ * mermaid entra por import dinamico.
+ *
+ * A biblioteca passa de 1 MB e so serve ao mapa mental, um dos quatro
+ * recursos deste modal. Importada no topo, ela viajava no chunk inicial e
+ * era baixada por todo aluno que abrisse o app, mesmo sem nunca gerar um
+ * diagrama.
+ *
+ * securityLevel 'strict' e explicito porque o codigo do diagrama vem da IA
+ * e o SVG resultante e injetado com innerHTML. Em 'strict' o mermaid
+ * sanitiza os rotulos e desliga callbacks de clique. E o padrao atual da
+ * lib, mas depender de um default para conter conteudo nao confiavel
+ * quebra na primeira troca de versao.
+ */
+let mermaidPromise: Promise<typeof import('mermaid').default> | null = null;
+
+function carregarMermaid() {
+  if (!mermaidPromise) {
+    mermaidPromise = import('mermaid').then(({ default: mermaid }) => {
+      mermaid.initialize({
+        securityLevel: 'strict',
+        htmlLabels: false,
+        theme: 'dark',
+        themeVariables: { primaryColor: '#f59e0b', primaryTextColor: '#fff', primaryBorderColor: '#f59e0b33', lineColor: '#f59e0b55', fontSize: '14px' },
+      });
+      return mermaid;
+    });
+  }
+  return mermaidPromise;
+}
 
 type StudioTool = 'resumo' | 'mapa' | 'flashcards' | 'gaps';
 
@@ -79,7 +109,7 @@ export function NotebookStudioModal() {
     }
     const topWords = Object.entries(wordFreq).sort((a, b) => b[1] - a[1]).slice(0, 10);
     const recent = notasList.slice(-5).reverse();
-    let out = '📋 Resumo das Anotações\n\nPalavras-chave mais frequentes:\n';
+    let out = ' Resumo das Anotações\n\nPalavras-chave mais frequentes:\n';
     out += topWords.map(([w, c]) => `• ${w} (${c}x)`).join('\n');
     out += '\n\nNotas Recentes:\n';
     out += recent.map((n: any) => `• ${new Date(n.data).toLocaleDateString()}: ${n.text.slice(0, 120)}${n.text.length > 120 ? '...' : ''}`).join('\n');
@@ -99,7 +129,7 @@ export function NotebookStudioModal() {
         const raw = await callGemini(prompt, apiKey);
         const mermaidCode = raw.replace(/```mermaid\s*/gi, '').replace(/```\s*$/gm, '').trim();
         await renderMermaid(mermaidCode);
-        setResult('🧠 Mapa mental gerado por IA');
+        setResult(' Mapa mental gerado por IA');
         return;
       } catch {}
     }
@@ -111,12 +141,12 @@ export function NotebookStudioModal() {
       }
     }
     const topWords = Object.entries(wordFreq).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([w]) => w);
-    let mermaidCode = 'graph TD\n  A["📚 Meus Estudos"]\n';
+    let mermaidCode = 'graph TD\n  A[" Meus Estudos"]\n';
     topWords.forEach((w, i) => {
       mermaidCode += `  N${i}["${w.charAt(0).toUpperCase() + w.slice(1)}"]\n  A --> N${i}\n`;
     });
     await renderMermaid(mermaidCode);
-    setResult(`🧠 Mapa mental com ${topWords.length} conceitos principais`);
+    setResult(` Mapa mental com ${topWords.length} conceitos principais`);
   }
 
   async function generateFlashcards() {
@@ -205,13 +235,13 @@ export function NotebookStudioModal() {
       setResult('Nenhum gap identificado. Continue adicionando anotações!');
       return;
     }
-    let out = '🔍 Análise de Gaps\n\nConceitos recorrentes em múltiplas anotações (possíveis gaps de compreensão):\n\n';
+    let out = ' Análise de Gaps\n\nConceitos recorrentes em múltiplas anotações (possíveis gaps de compreensão):\n\n';
     for (const [word, info] of gaps.slice(0, 8)) {
       out += `**${word}** (${info.count}x)\n`;
       for (const note of info.notes.slice(0, 2)) out += `  > "${note}..."\n`;
       out += '\n';
     }
-    out += '\n📖 Revise esses tópicos com prioridade. Eles aparecem em várias notas, indicando áreas de estudo ativo.';
+    out += '\n Revise esses tópicos com prioridade. Eles aparecem em várias notas, indicando áreas de estudo ativo.';
     setResult(out);
   }
 
@@ -221,6 +251,7 @@ export function NotebookStudioModal() {
 
   async function renderMermaid(code: string) {
     try {
+      const mermaid = await carregarMermaid();
       const { svg } = await mermaid.render('mmd_' + Date.now(), code);
       if (svg.includes('class="error"') || svg.includes('>Error<') || svg.includes('>error<') || svg.includes('flowchart-error')) {
         setMermaidSvg('');
@@ -240,21 +271,21 @@ export function NotebookStudioModal() {
   }
 
   const tools: { id: StudioTool; label: string; icon: string }[] = [
-    { id: 'resumo', label: 'Resumo', icon: '📋' },
-    { id: 'mapa', label: 'Mapa Mental', icon: '🧠' },
-    { id: 'flashcards', label: 'Flashcards', icon: '🃏' },
-    { id: 'gaps', label: 'Análise de Gaps', icon: '🔍' },
+    { id: 'resumo', label: 'Resumo', icon: 'lista' },
+    { id: 'mapa', label: 'Mapa Mental', icon: 'mapaMental' },
+    { id: 'flashcards', label: 'Flashcards', icon: 'marcador' },
+    { id: 'gaps', label: 'Análise de Gaps', icon: 'bussola' },
   ];
 
   return (
-    <Modal open={showNotebookStudio} onClose={() => setShowNotebookStudio(false)} title="🧠 Notebook AI Studio" fullScreen>
+    <Modal open={showNotebookStudio} onClose={() => setShowNotebookStudio(false)} title=" Notebook AI Studio" fullScreen>
       <div className="flex gap-2 overflow-x-auto pb-2">
         {tools.map(t => (
           <button key={t.id} onClick={() => { setActiveTool(t.id); runTool(t.id); }}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
               activeTool === t.id ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'glass-hover text-gray-400 border border-white/5'
             }`}>
-            {t.icon} {t.label}
+            <AppIcon name={t.icon} size={15} className="inline-block align-[-0.15em] mr-1.5" />{t.label}
           </button>
         ))}
       </div>
@@ -262,7 +293,7 @@ export function NotebookStudioModal() {
       <GlassCard className="mt-5">
         {notasList.length === 0 && !result && !loading && (
           <div className="text-center py-12">
-            <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-2xl mx-auto mb-3">📝</div>
+            <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-2xl mx-auto mb-3"><PenLine size={16} className="inline-block align-[-0.15em] text-amber-400" /></div>
             <p className="text-gray-400">Nenhuma nota salva.</p>
             <p className="text-sm text-gray-500 mt-1">Adicione notas ao Caderno primeiro.</p>
           </div>
@@ -317,27 +348,23 @@ export function NotebookStudioModal() {
                     onClick={() => { setFlashcardIndex(i => Math.max(0, i - 1)); setFlashcardFlipped(false); }}
                     disabled={flashcardIndex === 0}
                     className="btn-secondary flex-1 text-xs"
-                  >
-                    ← Anterior
+                  > Anterior
                   </button>
                   <button
                     onClick={() => { setFlashcardIndex(i => Math.min(flashcards.length - 1, i + 1)); setFlashcardFlipped(false); }}
                     disabled={flashcardIndex === flashcards.length - 1}
                     className="btn-primary flex-1 text-xs"
-                  >
-                    Próximo →
+                  > Próximo 
                   </button>
                 </div>
 
-                <button onClick={goToQuiz} className="btn-primary w-full">
-                  🎯 Ir para o Quiz com esses flashcards
+                <button onClick={goToQuiz} className="btn-primary w-full"> Ir para o Quiz com esses flashcards
                 </button>
               </div>
             )}
 
             {(window as any).__flashcardQuiz && flashcards.length === 0 && (
-              <button onClick={goToQuiz} className="btn-primary">
-                🎯 Ir para o Quiz
+              <button onClick={goToQuiz} className="btn-primary"> Ir para o Quiz
               </button>
             )}
           </div>
@@ -346,7 +373,7 @@ export function NotebookStudioModal() {
         {!loading && !result && notasList.length > 0 && (
           <div className="text-center py-8">
             <p className="text-sm text-gray-400">Selecione uma ferramenta acima para processar suas anotações.</p>
-            {aiAvailable(apiKey) && <p className="text-xs text-amber-400 mt-2">⚡ IA disponível — resultados mais precisos</p>}
+            {aiAvailable(apiKey) && <p className="text-xs text-amber-400 mt-2"><Zap size={16} className="inline-block align-[-0.15em] text-amber-400" /> IA disponível - resultados mais precisos</p>}
           </div>
         )}
       </GlassCard>

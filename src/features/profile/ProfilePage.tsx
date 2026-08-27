@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
+import { Brain, Check, CheckCircle2, ClipboardList, Lightbulb, Lock, Moon, XCircle, Zap } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { userRepository } from '../../shared/storage/UserRepository';
-import { getProfile, saveProfile, getEscolasCadastradas, getTurmasCadastradas, salvarEscola, salvarTurma } from '../../shared/lib/rankingEngine';
+import { getEscolasCadastradas, getTurmasCadastradas } from '../../shared/lib/rankingEngine';
+import { supabaseRepository } from '../../shared/storage/SupabaseRepository';
+import { AppIcon } from '../../shared/ui/AppIcon';
 import { hasProxy, testGeneration } from '../../shared/lib/aiService';
 import type { Escola, Turma } from '../../shared/types';
 
@@ -33,55 +36,41 @@ export function ProfilePage() {
   const [escolas, setEscolas] = useState<Escola[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
 
-  const [novaEscolaNome, setNovaEscolaNome] = useState('');
-  const [novaTurmaNome, setNovaTurmaNome] = useState('');
-  const [showNewSchool, setShowNewSchool] = useState(false);
-  const [showNewClass, setShowNewClass] = useState(false);
+  // Entrada na turma agora e por codigo do professor: escola_id e turma_id
+  // definem qual ranking e qual mural o aluno ve, entao nao podem ser
+  // escolhidos livremente pelo proprio aluno.
+  const [codigoTurma, setCodigoTurma] = useState('');
+  const [entrando, setEntrando] = useState(false);
 
   useEffect(() => {
     if (!session) return;
-    const profile = getProfile(session.uid);
-    setEscolaId(profile.escolaId || '');
-    setTurmaId(profile.turmaId || '');
-    const user = userRepository.findByEmail(session.email);
-    if (user) {
-      setSobrenome(user.sobrenome || '');
-      setMeta(user.metaEstudo || '');
-    }
+    setEscolaId(session.escolaId || '');
+    setTurmaId(session.turmaId || '');
+    // sobrenome/meta vem do perfil no banco; nao ha mais lista local de usuarios
+    setSobrenome(session.nome.split(' ').slice(1).join(' '));
     setEscolas(getEscolasCadastradas());
     setTurmas(getTurmasCadastradas());
   }, [session]);
 
-  function handleAddSchool() {
-    const id = `escola_${Date.now()}`;
-    const escola: Escola = { id, nome: novaEscolaNome.trim() };
-    salvarEscola(escola);
-    setEscolas(getEscolasCadastradas());
-    setEscolaId(id);
-    setNovaEscolaNome('');
-    setShowNewSchool(false);
-    setToast('Escola cadastrada!', 'success');
-  }
-
-  function handleAddClass() {
-    if (!escolaId) { setToast('Selecione uma escola primeiro', 'error'); return; }
-    const id = `turma_${Date.now()}`;
-    const turma: Turma = { id, nome: novaTurmaNome.trim(), escolaId };
-    salvarTurma(turma);
-    setTurmas(getTurmasCadastradas());
-    setTurmaId(id);
-    setNovaTurmaNome('');
-    setShowNewClass(false);
-    setToast('Turma cadastrada!', 'success');
+  async function handleEntrarNaTurma() {
+    if (!codigoTurma.trim()) return;
+    setEntrando(true);
+    const { ok, erro } = await supabaseRepository.entrarNaTurma(codigoTurma.trim());
+    setEntrando(false);
+    if (!ok) { setToast(erro ?? 'Não foi possível entrar na turma.', 'error'); return; }
+    setCodigoTurma('');
+    setToast('Você entrou na turma!', 'success');
+    // Recarrega para a sessao trazer escola/turma novas
+    const nova = await userRepository.getSession();
+    if (nova) useAppStore.getState().setSession(nova);
   }
 
   function handleSaveProfile() {
     if (!session) return;
-    userRepository.updateProfile(session.uid, { nome, sobrenome: sobrenome || undefined, metaEstudo: meta || undefined });
-
-    const profile = getProfile(session.uid);
-    saveProfile({ ...profile, nome, escolaId: escolaId || undefined, turmaId: turmaId || undefined });
-    setToast('Perfil atualizado!', 'success');
+    userRepository
+      .updateProfile({ nome, sobrenome: sobrenome || undefined, metaEstudo: meta || undefined })
+      .then((ok) => setToast(ok ? 'Perfil atualizado!' : 'Não foi possível salvar.', ok ? 'success' : 'error'))
+      .catch(() => setToast('Não foi possível salvar.', 'error'));
   }
 
   function handleSaveKey() {
@@ -104,14 +93,20 @@ export function ProfilePage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
-          { label: 'Nível', value: gamification.level, icon: '⭐' },
-          { label: 'XP Total', value: gamification.xp.toLocaleString(), icon: '⚡' },
-          { label: 'Sequência', value: `${gamification.streak}d`, icon: gamification.streak >= 3 ? '🔥' : '📅' },
+          { label: 'Nível', value: gamification.level, icon: 'estrela' },
+          { label: 'XP Total', value: gamification.xp.toLocaleString(), icon: 'raio' },
+          { label: 'Sequência', value: `${gamification.streak}d`, icon: 'fogo' },
         ].map(stat => (
           <div key={stat.label} className="glass-card rounded-2xl p-4 text-center">
-            <p className="text-xl mb-1">{stat.icon}</p>
+            <div className="flex justify-center mb-1.5">
+              <AppIcon
+                name={stat.icon}
+                size={18}
+                className={stat.label === 'Sequência' && gamification.streak >= 3 ? 'text-amber-400' : 'text-gray-500'}
+              />
+            </div>
             <p className={`text-lg font-bold tabular-nums ${stat.label === 'Sequência' && gamification.streak >= 3 ? 'text-amber-400' : 'text-white'}`}>
               {stat.value}
             </p>
@@ -135,86 +130,56 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* School & Class */}
+      {/* Escola e turma: somente leitura + entrada por codigo */}
       <div className="glass-card rounded-2xl p-5">
-        <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-          <span>🏫</span> Escola & Turma
-        </h2>
+        <h2 className="text-sm font-semibold text-gray-300 mb-4">Escola e Turma</h2>
         <div className="space-y-4">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider">Escola</label>
-            <div className="flex gap-2">
-              <select
-                value={escolaId}
-                onChange={e => { setEscolaId(e.target.value); setTurmaId(''); }}
-                className="flex-1 text-sm"
-              >
-                <option value="">Selecione uma escola</option>
-                {escolas.map(e => (
-                  <option key={e.id} value={e.id}>{e.nome}{e.cidade ? ` (${e.cidade})` : ''}</option>
-                ))}
-              </select>
-              <button onClick={() => setShowNewSchool(!showNewSchool)} className="btn-secondary text-xs px-3 py-2 shrink-0">
-                + Nova
-              </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider">Escola</label>
+              <p className="text-sm text-white glass-light rounded-xl px-3 py-2.5">
+                {escolas.find(e => e.id === escolaId)?.nome ?? 'Sem escola'}
+              </p>
             </div>
-            {showNewSchool && (
-              <div className="flex gap-2 mt-2 animate-slide-up">
-                <input
-                  value={novaEscolaNome}
-                  onChange={e => setNovaEscolaNome(e.target.value)}
-                  placeholder="Nome da escola"
-                  className="flex-1 text-sm"
-                />
-                <button onClick={handleAddSchool} disabled={!novaEscolaNome.trim()} className="btn-primary text-xs px-3 py-2 shrink-0">
-                  Adicionar
-                </button>
-              </div>
-            )}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider">Turma</label>
+              <p className="text-sm text-white glass-light rounded-xl px-3 py-2.5">
+                {turmas.find(t => t.id === turmaId)?.nome ?? 'Sem turma'}
+              </p>
+            </div>
           </div>
 
           <div>
-            <label className="block text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider">Turma</label>
+            <label htmlFor="codigo-turma" className="block text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider"> Entrar em uma turma
+            </label>
             <div className="flex gap-2">
-              <select
-                value={turmaId}
-                onChange={e => setTurmaId(e.target.value)}
-                className="flex-1 text-sm"
-                disabled={!escolaId}
+              <input
+                id="codigo-turma"
+                value={codigoTurma}
+                onChange={e => setCodigoTurma(e.target.value.toUpperCase())}
+                placeholder="Código do professor"
+                maxLength={12}
+                autoComplete="off"
+                className="flex-1 text-sm tracking-widest uppercase"
+              />
+              <button
+                onClick={handleEntrarNaTurma}
+                disabled={!codigoTurma.trim() || entrando}
+                className="btn-primary text-xs px-4 py-2 shrink-0"
               >
-                <option value="">Selecione uma turma</option>
-                {turmasFiltradas.map(t => (
-                  <option key={t.id} value={t.id}>{t.nome}</option>
-                ))}
-              </select>
-              <button onClick={() => setShowNewClass(!showNewClass)} className="btn-secondary text-xs px-3 py-2 shrink-0" disabled={!escolaId}>
-                + Nova
+                {entrando ? 'Entrando...' : 'Entrar'}
               </button>
             </div>
-            {showNewClass && (
-              <div className="flex gap-2 mt-2 animate-slide-up">
-                <input
-                  value={novaTurmaNome}
-                  onChange={e => setNovaTurmaNome(e.target.value)}
-                  placeholder="Ex: 3ª Série A"
-                  className="flex-1 text-sm"
-                />
-                <button onClick={handleAddClass} disabled={!novaTurmaNome.trim()} className="btn-primary text-xs px-3 py-2 shrink-0">
-                  Adicionar
-                </button>
-              </div>
-            )}
+            <p className="text-xs text-gray-600 mt-2"> Peça o código ao seu professor. Ele define qual ranking e qual mural você enxerga,
+              por isso a turma não pode ser escolhida na lista.
+            </p>
           </div>
-
-          <button onClick={handleSaveProfile} className="btn-primary w-full">
-            Salvar Configuração
-          </button>
         </div>
       </div>
 
       {/* Personal info */}
       <div className="glass-card rounded-2xl p-5">
-        <h2 className="text-sm font-semibold text-gray-300 mb-4">📋 Informações Pessoais</h2>
+        <h2 className="text-sm font-semibold text-gray-300 mb-4"><ClipboardList size={16} className="inline-block align-[-0.15em] text-gray-400" /> Informações Pessoais</h2>
         <div className="space-y-4">
           <div>
             <label className="block text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider">E-mail</label>
@@ -239,17 +204,26 @@ export function ProfilePage() {
       {/* AI Settings */}
       <div className="glass-card rounded-2xl p-5">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center text-lg">🤖</div>
+          {/* Era gradiente roxo/azul com robozinho: o combo que a regra 5
+              proibe. A identidade aqui e o sagui e o ambar da noite. */}
+          <img
+            src="/assets/sagui_estudando_2.png"
+            alt=""
+            width={40}
+            height={40}
+            loading="lazy"
+            className="w-10 h-10 rounded-xl object-contain bg-amber-500/10 p-1"
+          />
           <div>
-            <h2 className="text-sm font-semibold text-gray-300">IA Generativa</h2>
-            <p className="text-xs text-gray-500">Conecte sua IA para respostas no nível de pesquisador e suporte a estudos avançados.</p>
+            <h2 className="text-sm font-semibold text-gray-300">Mentor avançado</h2>
+            <p className="text-xs text-gray-500">Conecte sua chave para o sagui responder com mais profundidade.</p>
           </div>
         </div>
         {hasProxy() ? (
           <>
             <div className="flex items-start gap-2.5 text-xs text-emerald-300 bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/15">
-              <span className="shrink-0">⚡</span>
-              <span><strong>IA via servidor (proxy grátis).</strong> A inteligência do Midnight Mentor já está configurada — nenhuma chave necessária e pronto para usar. A chave fica protegida no servidor.</span>
+              <span className="shrink-0"><Zap size={16} className="inline-block align-[-0.15em] text-amber-400" /></span>
+              <span><strong>IA via servidor (proxy grátis).</strong> A inteligência do Midnight Mentor já está configurada - nenhuma chave necessária e pronto para usar. A chave fica protegida no servidor.</span>
             </div>
 
             <button
@@ -257,18 +231,18 @@ export function ProfilePage() {
               disabled={aiTest === 'testing'}
               className="btn-secondary w-full mt-3"
             >
-              {aiTest === 'testing' ? 'Testando conexão…' : '🧪 Testar conexão com a IA'}
+              {aiTest === 'testing' ? 'Testando conexão…' : ' Testar conexão com a IA'}
             </button>
 
             {aiTest === 'ok' && (
               <div className="flex items-start gap-2 text-xs text-emerald-300 bg-emerald-500/10 rounded-xl px-3 py-2.5 mt-2 border border-emerald-500/15">
-                <span className="shrink-0">✅</span>
+                <span className="shrink-0"><CheckCircle2 size={16} className="inline-block align-[-0.15em] text-emerald-400" /></span>
                 <span>IA conectada! Resposta do modelo: <strong className="text-emerald-200">“{aiTestMsg}”</strong></span>
               </div>
             )}
             {aiTest === 'error' && (
               <div className="flex items-start gap-2 text-xs text-red-300 bg-red-500/10 rounded-xl px-3 py-2.5 mt-2 border border-red-500/15">
-                <span className="shrink-0">❌</span>
+                <span className="shrink-0"><XCircle size={16} className="inline-block align-[-0.15em] text-red-400" /></span>
                 <span>Falha: <code className="text-red-200 break-all">{aiTestMsg}</code></span>
               </div>
             )}
@@ -276,7 +250,7 @@ export function ProfilePage() {
         ) : (
           <>
             <div className="flex items-center gap-2 text-xs text-gray-500 bg-amber-500/5 rounded-xl p-3 border border-amber-500/10 mb-4">
-              <span className="text-amber-400 shrink-0">💡</span>
+              <span className="text-amber-400 shrink-0"><Lightbulb size={16} className="inline-block align-[-0.15em] text-amber-400" /></span>
               <span>Use sua chave <strong className="text-gray-300">Gemini API</strong> (gratuita) do Google AI Studio. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-amber-400 underline">Obter chave grátis</a></span>
             </div>
 
@@ -292,24 +266,23 @@ export function ProfilePage() {
                 onClick={() => setShowKey(!showKey)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 p-1.5"
               >
-                {showKey ? '🙈' : '👁️'}
+                {showKey ? '' : ''}
               </button>
             </div>
 
             <div className="flex gap-2 mb-4">
               <button onClick={handleSaveKey} className="btn-primary flex-1" disabled={!keyInput.trim()}>
-                {keyInput.trim() === apiKey ? 'Conectado ✓' : 'Conectar IA'}
+                {keyInput.trim() === apiKey ? 'Conectado ' : 'Conectar IA'}
               </button>
               {apiKey && (
-                <button onClick={() => { setKeyInput(''); setApiKey(''); }} className="btn-ghost text-sm text-red-400 hover:text-red-300">
-                  Remover
+                <button onClick={() => { setKeyInput(''); setApiKey(''); }} className="btn-ghost text-sm text-red-400 hover:text-red-300"> Remover
                 </button>
               )}
             </div>
 
             {apiKey && (
               <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/5 rounded-xl px-3 py-2 border border-emerald-500/10">
-                <span>✓</span> IA conectada. O chat usará IA generativa para respostas inteligentes.
+                <span><Check size={16} className="inline-block align-[-0.15em] text-emerald-400" /></span> IA conectada. O chat usará IA generativa para respostas inteligentes.
               </div>
             )}
 
@@ -320,17 +293,17 @@ export function ProfilePage() {
                   disabled={aiTest === 'testing'}
                   className="btn-secondary w-full mt-3 text-center"
                 >
-                  {aiTest === 'testing' ? 'Testando conexão…' : '🧪 Testar conexão com a IA'}
+                  {aiTest === 'testing' ? 'Testando conexão…' : ' Testar conexão com a IA'}
                 </button>
                 {aiTest === 'ok' && (
                   <div className="flex items-start gap-2 text-xs text-emerald-300 bg-emerald-500/10 rounded-xl px-3 py-2.5 mt-2 border border-emerald-500/15">
-                    <span className="shrink-0">✅</span>
+                    <span className="shrink-0"><CheckCircle2 size={16} className="inline-block align-[-0.15em] text-emerald-400" /></span>
                     <span>Conexão ok! Resposta: <em className="text-emerald-200">“{aiTestMsg}”</em></span>
                   </div>
                 )}
                 {aiTest === 'error' && (
                   <div className="flex items-start gap-2 text-xs text-red-300 bg-red-500/10 rounded-xl px-3 py-2.5 mt-2 border border-red-500/15">
-                    <span className="shrink-0">❌</span>
+                    <span className="shrink-0"><XCircle size={16} className="inline-block align-[-0.15em] text-red-400" /></span>
                     <span>Falha: <code className="text-red-200 break-all">{aiTestMsg}</code></span>
                   </div>
                 )}
@@ -342,27 +315,25 @@ export function ProfilePage() {
 
       {/* Tools */}
       <div className="glass-card rounded-2xl p-5">
-        <h2 className="text-sm font-semibold text-gray-300 mb-4">🔧 Ferramentas</h2>
-        <button onClick={() => setShowWeeklyReport(true)} className="btn-secondary w-full text-center">
-          📊 Ver Relatório Semanal
+        <h2 className="text-sm font-semibold text-gray-300 mb-4"> Ferramentas</h2>
+        <button onClick={() => setShowWeeklyReport(true)} className="btn-secondary w-full text-center"> Ver Relatório Semanal
         </button>
       </div>
 
       {/* About */}
       <div className="glass-card rounded-2xl p-5">
         <div className="flex items-center gap-2 mb-4">
-          <span className="text-lg">🌙</span>
+          <span className="text-lg"><Moon size={16} className="inline-block align-[-0.15em] text-amber-400" /></span>
           <h2 className="text-sm font-semibold text-gray-300">Midnight Mentor</h2>
         </div>
         <div className="text-sm text-gray-400 leading-relaxed space-y-2">
-          <p>🧠 Assistente de estudos inteligente para o ENEM.</p>
-          <p>🔒 <strong className="text-gray-300">Privacidade total:</strong> dados salvos apenas no navegador.</p>
-          <p>⚡ Modo offline: motor local baseado em regras. Com chave API, usa IA generativa.</p>
+          <p><Brain size={16} className="inline-block align-[-0.15em] text-violet-400" /> Assistente de estudos inteligente para o ENEM.</p>
+          <p><Lock size={16} className="inline-block align-[-0.15em] text-gray-500" /> <strong className="text-gray-300">Privacidade total:</strong> dados salvos apenas no navegador.</p>
+          <p><Zap size={16} className="inline-block align-[-0.15em] text-amber-400" /> Modo offline: motor local baseado em regras. Com chave API, usa IA generativa.</p>
         </div>
       </div>
 
-      <button onClick={logout} className="btn-danger w-full text-center">
-        Sair da Conta
+      <button onClick={logout} className="btn-danger w-full text-center"> Sair da Conta
       </button>
     </div>
   );

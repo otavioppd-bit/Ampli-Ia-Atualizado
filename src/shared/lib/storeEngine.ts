@@ -1,5 +1,5 @@
 // =========================================================
-// MOTOR DA LOJA — lógica pura de compra/equipe (sem estado).
+// MOTOR DA LOJA - lógica pura de compra/equipe (sem estado).
 // Testável em node puro; o storeStore (zustand) é apenas a
 // camada de persistência + integração com o XP.
 // =========================================================

@@ -1,12 +1,29 @@
-import { useEffect, useRef, useState } from 'react';
-import { useAppStore } from './stores/appStore';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { LazyMotion } from 'motion/react';
+import { useAppStore, persistir } from './stores/appStore';
 import { userRepository } from './shared/storage/UserRepository';
 import { supabaseRepository } from './shared/storage/SupabaseRepository';
 import { isSupabaseConfigured } from './shared/lib/supabase';
 import { AuthPage } from './features/auth/AuthPage';
 import { AppShell } from './app/AppShell';
-import { EducatorPage } from './features/educator/EducatorPage';
-import { ParentPage } from './features/parent/ParentPage';
+import { PageSkeleton } from './shared/ui/Skeleton';
+
+/*
+ * As telas de educador e responsavel entram por import dinamico.
+ *
+ * ParentsDashboard carrega chart.js; sendo importado de forma estatica, o
+ * grafico viajava no bundle inicial de TODO aluno, que nunca abre essa
+ * tela. Agora so quem tem o papel correspondente baixa esse codigo.
+ */
+const EducatorPage = lazy(() =>
+  import('./features/educator/EducatorPage').then((m) => ({ default: m.EducatorPage })),
+);
+const ParentPage = lazy(() =>
+  import('./features/parent/ParentPage').then((m) => ({ default: m.ParentPage })),
+);
+const PsicologoPage = lazy(() =>
+  import('./features/psicologo/PsicologoPage').then((m) => ({ default: m.PsicologoPage })),
+);
 import { ParticleCanvas } from './features/atmo/ParticleCanvas';
 import { Toast } from './shared/ui/Toast';
 import { OnboardingTour } from './shared/ui/OnboardingTour';
@@ -15,58 +32,142 @@ import { mascotStore } from './stores/mascotStore';
 import { GamificationState, ChatPersona } from './shared/types';
 import { getToday } from './shared/lib/utils';
 
+/*
+ * Carregamento tardio das features de animação.
+ *
+ * O pacote inteiro do motion pesa ~40 kB gzip e entrava no primeiro
+ * carregamento, porque o shell anima. Com LazyMotion, o bundle inicial
+ * leva só o mínimo e o motor de animação chega depois, sem segurar a
+ * primeira pintura. Em troca, os componentes usam <m.div> em vez de
+ * <motion.div>: `strict` faz o build reclamar se alguém esquecer.
+ *
+ * domMax (e não domAnimation) porque usamos layoutId na navegação e
+ * `layout` no ranking, que só existem no conjunto completo.
+ */
+const featuresAnimacao = () => import('motion/react').then((mod) => mod.domMax);
+import { useStoreStore } from './stores/storeStore';
+import { hidratarCache } from './shared/lib/rankingEngine';
+import { useBemEstarStore } from './stores/bemEstarStore';
+import { deveGerarRelatorio } from './shared/lib/decompressionReport';
+
 export default function App() {
-  const { isAuthenticated, userRole, setSession, updateGamification, setLogs, setNotas, setChatMessages, setPersonas, setActivePersonaId, setApiKey, gamification } = useAppStore();
+  const {
+    isAuthenticated,
+    userRole,
+    setSession,
+    updateGamification,
+    setLogs,
+    setNotas,
+    setChatMessages,
+    setPersonas,
+    setActivePersonaId,
+    setApiKey,
+    gamification,
+  } = useAppStore();
   const { session } = useAppStore();
-  const logs = useAppStore(s => s.logs);
+  const logs = useAppStore((s) => s.logs);
+  // Assinatura minima do store de bem-estar: so o que dispara o efeito
+  // do relatorio semanal, para nao re-renderizar o App a cada telemetria.
+  const relatoriosCarregados = useBemEstarStore((s) => s.carregado);
   const prevLevel = useRef(gamification.level);
   const [levelUp, setLevelUp] = useState<number | null>(null);
 
-  // Restore session + load data from Supabase if connected
+  /**
+   * Sessao + dados do usuario.
+   *
+   * A sessao vem do JWT (onAuthChange), nao mais de um objeto no
+   * localStorage. Isso cobre tres casos que antes ficavam de fora: token
+   * expirado, logout em outra aba e refresh automatico.
+   */
   useEffect(() => {
-    async function load() {
-      const sessionData = userRepository.getSession();
-      if (sessionData) {
-        setSession(sessionData);
+    const PADRAO = ['mentor_enem', 'prof_matematica', 'prof_portugues', 'prof_ciencias', 'prof_humanas'];
 
-        if (isSupabaseConfigured()) {
-          try {
-            const [gam, logs, notas, _quizResults, personas] = await Promise.all([
-              supabaseRepository.loadGamification(),
-              supabaseRepository.loadLogs(),
-              supabaseRepository.loadNotas(),
-              supabaseRepository.loadQuizResults(),
-              supabaseRepository.loadPersonas(),
-            ]);
-            if (gam) updateGamification(gam);
-            if (logs.length > 0) setLogs(logs);
-            if (notas.length > 0) setNotas(notas);
-            if (personas.length > 0) {
-              const allPersonas = [...useAppStore.getState().personas.filter(p => ['mentor_enem', 'prof_matematica', 'prof_portugues', 'prof_ciencias', 'prof_humanas'].includes(p.id)), ...personas];
-              setPersonas(allPersonas);
-            }
-          } catch { /* fallback to localStorage */ }
-        }
+    async function carregarDados() {
+      const [gam, logs, notas, chat, personas, desafios, prefs, escolas, turmas, quizzes, humor] =
+        await Promise.all([
+          supabaseRepository.loadGamification(),
+          supabaseRepository.loadLogs(),
+          supabaseRepository.loadNotas(),
+          supabaseRepository.loadChat(),
+          supabaseRepository.loadPersonas(),
+          supabaseRepository.loadDesafios(),
+          supabaseRepository.loadPreferencias(),
+          supabaseRepository.loadEscolas(),
+          supabaseRepository.loadTurmas(),
+          // Faltavam no boot: sem eles o historico de quiz ficava sempre
+          // vazio, e por isso o Mentor nunca sabia qual materia retomar.
+          supabaseRepository.loadQuizResults(),
+          supabaseRepository.loadHumor(),
+        ]);
+
+      // Inventario da loja e cache de escolas/turmas ficavam sem carregar:
+      // as funcoes existiam, mas nada as chamava. Efeito visivel: item ja
+      // comprado voltava a aparecer como disponivel a cada recarga, e o
+      // nome da escola do aluno nunca saia dos dados de demonstracao.
+      void useStoreStore.getState().carregar();
+      // Telemetria, carteira de foco, revisoes e relatorios do modulo de
+      // bem-estar. Fora do Promise.all acima porque nenhuma tela do boot
+      // depende deles - o dashboard mostra o indice de fadiga quando
+      // chegarem.
+      void useBemEstarStore.getState().carregarTudo();
+      hidratarCache({ escolas, turmas });
+
+      if (gam) updateGamification(gam);
+      setLogs(logs);
+      setNotas(notas);
+      setChatMessages(chat);
+      if (personas.length > 0) {
+        const embutidas = useAppStore.getState().personas.filter((p) => PADRAO.includes(p.id));
+        setPersonas([...embutidas, ...personas]);
+      }
+      useAppStore.setState({ challengeResults: desafios, quizResults: quizzes });
+      if (humor.length > 0) {
+        useAppStore.setState({ moodHistory: humor, currentMood: humor[humor.length - 1].mood });
+      }
+      if (prefs) {
+        useAppStore.setState({
+          challengeSeenTutorial: !!prefs.desafio_tutorial,
+          isMuted: !!prefs.mudo,
+        });
+        if (prefs.persona_ativa_id) setActivePersonaId(String(prefs.persona_ativa_id));
       }
     }
-    load();
+
+    // Sessao ja existente (F5 na pagina)
+    userRepository.getSession().then((s) => {
+      if (s) {
+        setSession(s);
+        /*
+         * Se a carga inicial falhar, o app abre com anotacoes, XP e
+         * historico vazios: exatamente a aparencia de "perdi tudo". O
+         * aviso separa "o servidor nao respondeu" de "voce nao tem nada",
+         * que sao conclusoes muito diferentes para quem estuda aqui.
+         */
+        persistir(carregarDados(), {
+          mensagem: 'Nao foi possivel carregar seus dados. Recarregue a pagina.',
+        });
+      }
+    });
+
+    // Login/logout/refresh, inclusive vindos de outra aba
+    const cancelar = userRepository.onAuthChange((s) => {
+      setSession(s);
+      if (s) {
+        hidratarCache({ perfil: { uid: s.uid, nome: s.nome, email: s.email, escolaId: s.escolaId ?? undefined, turmaId: s.turmaId ?? undefined } });
+        persistir(carregarDados(), {
+          mensagem: 'Nao foi possivel carregar seus dados. Recarregue a pagina.',
+        });
+      }
+    });
+    return cancelar;
   }, []);
 
-  // Restore localStorage data (fallback)
+  /**
+   * Chave da IA: unico dado que continua no localStorage de proposito.
+   * E a chave Gemini pessoal do usuario; guardar num banco compartilhado
+   * criaria um alvo unico para todas as chaves de todos os alunos.
+   */
   useEffect(() => {
-    if (isSupabaseConfigured()) return;
-    const savedLogs = localStorage.getItem('mm_logs');
-    if (savedLogs) { try { setLogs(JSON.parse(savedLogs)); } catch { /* ignore */ } }
-    const savedNotas = localStorage.getItem('mm_notas');
-    if (savedNotas) { try { setNotas(JSON.parse(savedNotas)); } catch { /* ignore */ } }
-    const savedChat = localStorage.getItem('mm_chat_messages');
-    if (savedChat) { try { setChatMessages(JSON.parse(savedChat)); } catch { /* ignore */ } }
-    const savedGamification = localStorage.getItem('mm_gamification');
-    if (savedGamification) { try { updateGamification(JSON.parse(savedGamification) as GamificationState); } catch { /* ignore */ } }
-    const savedPersonas = localStorage.getItem('mm_personas');
-    if (savedPersonas) { try { const p = JSON.parse(savedPersonas) as ChatPersona[]; if (p.length > 0) setPersonas(p); } catch { /* ignore */ } }
-    const activePersona = localStorage.getItem('mm_active_persona');
-    if (activePersona) setActivePersonaId(activePersona);
     const savedApiKey = localStorage.getItem('mm_api_key');
     if (savedApiKey) setApiKey(savedApiKey);
   }, []);
@@ -90,11 +191,29 @@ export default function App() {
     }
   }, [isAuthenticated, userRole]);
 
+  /*
+   * Relatorio de descompressao: abre sozinho na sexta.
+   *
+   * A conferencia usa a ULTIMA semana ja gerada, nao um flag local:
+   * assim quem abriu o app no sabado ainda recebe o da semana, e quem
+   * ja leu na sexta nao ve o modal de novo a cada recarga.
+   */
+  useEffect(() => {
+    if (!isAuthenticated || userRole !== 'student') return;
+    const { relatorios, carregado } = useBemEstarStore.getState();
+    if (!carregado) return;
+    if (deveGerarRelatorio(relatorios[0]?.semanaInicio ?? null)) {
+      useAppStore.getState().setShowWeeklyReport(true);
+    }
+  }, [isAuthenticated, userRole, relatoriosCarregados]);
+
   // Mascote: comemora subida de nível
   useEffect(() => {
     if (!isAuthenticated || userRole !== 'student') return;
     if (gamification.level > prevLevel.current) {
-      mascotStore.getState().setState('success', `🎉 Uau! Você subiu para o nível ${gamification.level}! Continue assim!`);
+      mascotStore
+        .getState()
+        .setState('success', `Uau! Você subiu para o nível ${gamification.level}! Continue assim!`);
       setLevelUp(gamification.level);
     }
     prevLevel.current = gamification.level;
@@ -103,23 +222,19 @@ export default function App() {
   // Mascote: celebra streak novo (a partir de 2 dias)
   useEffect(() => {
     if (!isAuthenticated || userRole !== 'student' || gamification.streak < 2) return;
-    mascotStore.getState().setState('success', `🔥 ${gamification.streak} dias seguidos de estudo! Seu foco é inspirador!`);
+    mascotStore
+      .getState()
+      .setState('success', `${gamification.streak} dias seguidos de estudo! Seu foco é inspirador!`);
   }, [gamification.streak, isAuthenticated, userRole]);
 
-  // Persist gamification to localStorage + Supabase
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    localStorage.setItem('mm_gamification', JSON.stringify(useAppStore.getState().gamification));
-    if (isSupabaseConfigured() && session) {
-      supabaseRepository.saveGamification(useAppStore.getState().gamification).catch(() => {});
-    }
-  }, [gamification]);
-
-  // Persist logs
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    localStorage.setItem('mm_logs', JSON.stringify(logs));
-  }, [isAuthenticated, logs]);
+  /*
+   * Gamificacao e logs NAO sao persistidos aqui.
+   *
+   * Antes, todo render que mudasse o XP reescrevia o estado inteiro no
+   * banco - o que tambem significa que o cliente ditava o placar. Agora a
+   * escrita acontece de forma pontual, dentro de registrar_xp(), e este
+   * componente so exibe.
+   */
 
   if (!isAuthenticated) {
     return (
@@ -132,32 +247,71 @@ export default function App() {
 
   if (userRole === 'educator') {
     return (
-      <>
+      <LazyMotion features={featuresAnimacao} strict>
         <ParticleCanvas />
-        <EducatorPage />
+        <Suspense
+          fallback={
+            <div className="p-6">
+              <PageSkeleton />
+            </div>
+          }
+        >
+          <EducatorPage />
+        </Suspense>
         <Toast />
-      </>
+      </LazyMotion>
     );
   }
 
   if (userRole === 'parent') {
     return (
-      <>
+      <LazyMotion features={featuresAnimacao} strict>
         <ParticleCanvas />
-        <ParentPage />
+        <Suspense
+          fallback={
+            <div className="p-6">
+              <PageSkeleton />
+            </div>
+          }
+        >
+          <ParentPage />
+        </Suspense>
         <Toast />
-      </>
+      </LazyMotion>
+    );
+  }
+
+  /*
+   * O papel `psychologist` precisa de tela propria: sem este ramo ele
+   * cairia no app do aluno - com quiz e ranking, e sem lugar para
+   * declarar horario de atendimento.
+   */
+  if (userRole === 'psychologist') {
+    return (
+      <LazyMotion features={featuresAnimacao} strict>
+        <ParticleCanvas />
+        <Suspense
+          fallback={
+            <div className="p-6">
+              <PageSkeleton />
+            </div>
+          }
+        >
+          <PsicologoPage />
+        </Suspense>
+        <Toast />
+      </LazyMotion>
     );
   }
 
   // Default: student
   return (
-    <>
+    <LazyMotion features={featuresAnimacao} strict>
       <ParticleCanvas />
       <AppShell />
       <Toast />
       <OnboardingTour />
       <LevelUpOverlay open={levelUp !== null} level={levelUp ?? 1} onClose={() => setLevelUp(null)} />
-    </>
+    </LazyMotion>
   );
 }

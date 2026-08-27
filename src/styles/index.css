@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -64,11 +62,14 @@
     appearance: none;
     background: transparent;
     border: none;
-    padding: 0;
+    /* A trilha tem 4px por desenho, mas o ALVO precisa de 44px para o
+       dedo (WCAG 2.5.5). O padding cria a area sem engordar o traco. */
+    padding-block: 0.625rem;
     cursor: pointer;
-    height: 24px;
+    height: 44px;
     display: flex;
     align-items: center;
+    touch-action: pan-y;
   }
   input[type="range"]::-webkit-slider-runnable-track {
     height: 4px;
@@ -115,16 +116,25 @@
     border-color: transparent;
     box-shadow: 0 0 12px rgba(245, 158, 11, 0.2);
   }
+  /*
+   * Tique DESENHADO, nao um caractere.
+   *
+   * Antes era `content: '✓'` (U+2713), que depende da fonte instalada: o
+   * mesmo checkbox saia com espessura e tamanho diferentes em cada
+   * sistema, e num aparelho sem o glifo apareceria o retangulo vazio. Duas
+   * bordas giradas 45 graus resolvem sem depender de fonte nenhuma e ficam
+   * nitidas em qualquer densidade de tela.
+   */
   input[type="checkbox"]:checked::after {
-    content: '✓';
-    color: #0f172a;
-    font-size: 14px;
-    font-weight: 700;
-    line-height: 1;
+    content: '';
     position: absolute;
-    top: 50%;
+    top: 45%;
     left: 50%;
-    transform: translate(-50%, -50%);
+    width: 5px;
+    height: 9px;
+    border: solid #0f172a;
+    border-width: 0 2px 2px 0;
+    transform: translate(-50%, -50%) rotate(45deg);
   }
   input[type="checkbox"]:hover:not(:checked) { border-color: rgba(245, 158, 11, 0.35); }
 
@@ -138,22 +148,37 @@
   /* === Glass === */
   .glass {
     background: rgba(17, 24, 39, 0.75);
-    backdrop-filter: blur(24px) saturate(1.2);
+    /*
+     * ORDEM IMPORTA: prefixo primeiro, propriedade padrao por ultimo.
+     *
+     * Com a ordem invertida o minificador do build descartava a
+     * propriedade padrao e publicava so a `-webkit-`, e o Chrome ignora a
+     * prefixada quando a padrao nao esta presente. Resultado: o desfoque
+     * do vidro funcionava em `npm run dev` e sumia em `npm run build`,
+     * onde raramente se olha. Medido com listras de alto contraste atras
+     * do painel (desvio padrao da luminancia, menor = mais borrado):
+     *   so -webkit-  : 19.2  (identico a nao ter filtro)
+     *   so padrao    :  0.3  (borrado)
+     *   sem nenhum   : 19.2
+     */
     -webkit-backdrop-filter: blur(24px) saturate(1.2);
+    backdrop-filter: blur(24px) saturate(1.2);
     border: 1px solid rgba(255, 255, 255, 0.05);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
   .glass-light {
     background: rgba(30, 41, 59, 0.35);
-    backdrop-filter: blur(16px);
+    /* Prefixo antes do padrao: ver a nota em .glass. */
     -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.03);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
   .glass-card {
     background: rgba(17, 24, 39, 0.7);
-    backdrop-filter: blur(24px) saturate(1.2);
+    /* Prefixo antes do padrao: ver a nota em .glass. */
     -webkit-backdrop-filter: blur(24px) saturate(1.2);
+    backdrop-filter: blur(24px) saturate(1.2);
     border: 1px solid rgba(255, 255, 255, 0.05);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
     transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
@@ -206,7 +231,11 @@
     transform: translateY(-1px);
     box-shadow: 0 8px 28px rgba(245, 158, 11, 0.3);
   }
-  .btn-primary:active:not(:disabled) { transform: translateY(0); }
+  /* Resposta ao toque: a escala confirma o clique antes mesmo da acao
+     acontecer, o que faz a interface parecer mais rapida do que e. */
+  .btn-primary:active:not(:disabled) { transform: scale(0.96); }
+  .btn-secondary:active:not(:disabled),
+  .btn-ghost:active:not(:disabled) { transform: scale(0.96); }
   .btn-secondary {
     @apply btn;
     background: rgba(255, 255, 255, 0.04);
@@ -409,7 +438,7 @@
   }
 }
 
-/* ==== Modo Desafio — experiência estilo prova ENEM ==== */
+/* ==== Modo Desafio: experiência estilo prova ENEM ==== */
 .challenge-hero {
   position: relative;
   overflow: hidden;
@@ -480,7 +509,7 @@
 }
 
 /* =========================================================
-   MASCOTE INTERATIVO — máquina de estados estilo Duolingo
+   MASCOTE INTERATIVO: máquina de estados estilo Duolingo
    Estados: idle | typing | loading | success | error
    Animações aplicadas ao .mascot-img dentro do container.
    ========================================================= */
@@ -757,7 +786,7 @@
 }
 
 /* =========================================================
-   MODO MEDITAÇÃO — respiração profunda guiada (sagui)
+   MODO MEDITAÇÃO: respiração profunda guiada (sagui)
    Dispara ao clicar em "Meditar" quando o usuário está cansado.
    ========================================================= */
 
@@ -784,7 +813,7 @@
 }
 
 /* Personagem lateral respirando: escala cintilante + leve glow ao inspirar */
-/* "breathe": inspira scale(1.05) e expira scale(1.0) — loop infinito alternado */
+/* "breathe": inspira scale(1.05) e expira scale(1.0): loop infinito alternado */
 @keyframes breathe {
   0% { transform: scale(1); }
   50% { transform: scale(1.05); }
@@ -828,7 +857,7 @@
 }
 
 /* =========================================================
-    TUTORIAL — personagem falando + setas sequenciais
+    TUTORIAL: personagem falando + setas sequenciais
    ========================================================= */
 
 /* Personagem simulando fala: encurta/alonga verticalmente (boca que "abre") */
@@ -905,7 +934,7 @@
 }
 
 /* =========================================================
-    MARCO DA LIÇÃO — XP salta no centro + sagui cai com joinha
+    MARCO DA LIÇÃO: XP salta no centro + sagui cai com joinha
    ========================================================= */
 
 /* XP "pop up" central */
@@ -969,7 +998,7 @@
 }
 
 /* =========================================================
-   LEVEL UP — overlay de tela cheia em destaque
+   LEVEL UP: overlay de tela cheia em destaque
    Dispara ao subir de nível (Duolingo-style celebration).
    ========================================================= */
 .levelup-overlay {
@@ -980,6 +1009,7 @@
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   cursor: pointer;
 }
@@ -1071,7 +1101,7 @@
 }
 
 /* =========================================================
-   ASSISTENTE (Sagui) — botão + chat embutido
+   ASSISTENTE (Sagui): botão + chat embutido
    ========================================================= */
 .mascot-assist-idle {
   animation: assistFloat 3.4s ease-in-out infinite;
@@ -1097,6 +1127,7 @@
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(252, 211, 77, 0.35);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   color: #fef3c7;
   font-size: 12px;
@@ -1121,4 +1152,158 @@
   .mascot-assist-idle, .assistant-chat {
     animation: none !important;
   }
+}
+
+/* =========================================================
+   Utilitarios de layout responsivo e movimento
+   Adicionados na refatoracao de front.
+   ========================================================= */
+
+/* A classe ja era usada no AppShell mas nunca existiu: no iPhone a bottom
+   nav ficava por baixo da barra de gestos. */
+.safe-area-bottom {
+  padding-bottom: calc(0.375rem + env(safe-area-inset-bottom, 0px));
+}
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Alvo de toque minimo de 48x48 (recomendacao de acessibilidade). */
+.tap-target {
+  min-width: 48px;
+  min-height: 48px;
+}
+
+/* Pressionar botao: resposta imediata, o que da a sensacao de app nativo. */
+.press {
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.press:active {
+  transform: scale(0.96);
+}
+
+/* Card clicavel sobe de leve no hover (so no desktop, onde ha ponteiro). */
+@media (hover: hover) and (pointer: fine) {
+  .lift {
+    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* Skeleton: bloco glass pulsando. Comunica "carregando" sem spinner. */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.07) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.5s linear infinite;
+  border-radius: 0.75rem;
+}
+
+/* Tooltip do rail em tablet: so aparece no hover do icone. */
+.rail-tip {
+  position: absolute;
+  left: calc(100% + 0.5rem);
+  top: 50%;
+  transform: translateY(-50%) scale(0.94);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 150ms ease, transform 150ms ease;
+  z-index: 60;
+}
+.rail-item:hover .rail-tip,
+.rail-item:focus-visible .rail-tip {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+/* Backdrop do bottom sheet. */
+.sheet-backdrop {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .press,
+  .lift,
+  .skeleton,
+  .sheet-backdrop,
+  .rail-tip {
+    animation: none !important;
+    transition: none !important;
+  }
+  .press:active,
+  .lift:hover {
+    transform: none;
+  }
+}
+
+/* =========================================================
+   Risco animado ao concluir tarefa do Plano do Dia
+   O line-through do CSS aparece de uma vez. Aqui a linha e
+   desenhada da esquerda para a direita, o que da a leitura
+   de "acabei de riscar isto" em vez de "isto ja estava
+   riscado". Anima so transform, entao nao causa reflow.
+   ========================================================= */
+.risco {
+  position: relative;
+  display: inline;
+}
+.risco::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0.62em;
+  height: 1.5px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  border-radius: 1px;
+}
+.risco--feito::after {
+  animation: riscar 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes riscar {
+  to { transform: scaleX(1); }
+}
+
+/* Shimmer do skeleton: gradiente percorrendo o bloco.
+   background-position nao dispara layout, so paint. */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.09) 45%,
+    rgba(255, 255, 255, 0.03) 90%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .risco--feito::after { animation: none; transform: scaleX(1); }
+  .skeleton { animation: none; }
+}
+
+/* =========================================================
+   Ranking
+   Tentei content-visibility aqui para o navegador pular as
+   linhas fora da tela. Reverti: no celular a linha quebra em
+   tres (apelido, turma, escola) e a altura reservada de 63px
+   nao batia, produzindo texto sobreposto na captura de 375px.
+   O ganho de alguns ms nao paga um defeito visivel.
+   ========================================================= */
+.linha-ranking {
+  /* Com a linha secundaria truncada, toda linha tem a MESMA altura, entao
+     content-visibility pode pular o que esta fora da tela sem errar o
+     espaco reservado. Antes a altura variava (o texto quebrava em tres no
+     celular) e o valor fixo produzia texto sobreposto. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 63px;
 }

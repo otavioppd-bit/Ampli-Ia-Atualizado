@@ -57,7 +57,22 @@ export function ParticleCanvas() {
     resize();
     window.addEventListener('resize', resize);
 
-    const count = 50;
+    /*
+     * Custo do fundo animado.
+     *
+     * Este laco roda o tempo todo, em todas as telas. Sob CPU 4x ele
+     * sozinho ja produzia tarefas longas com o app parado. Tres ajustes:
+     *   - menos particulas em tela pequena, onde a CPU e mais fraca;
+     *   - pausa quando a aba esta em segundo plano (o usuario nao ve);
+     *   - desliga por completo com movimento reduzido, que e um pedido
+     *     explicito de menos animacao, nao de animacao mais lenta.
+     */
+    const reduzMovimento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduzMovimento) {
+      window.removeEventListener('resize', resize);
+      return;
+    }
+    const count = window.innerWidth < 768 ? 24 : 50;
     particlesRef.current = Array.from({ length: count }, () => ({
       x: Math.random() * (canvas.width || window.innerWidth),
       y: Math.random() * (canvas.height || window.innerHeight),
@@ -98,7 +113,8 @@ export function ParticleCanvas() {
         ctx.fill();
       }
       ctx.globalAlpha = 1;
-      animId = requestAnimationFrame(animate);
+      // document.hidden: aba em segundo plano nao precisa desenhar nada.
+      animId = requestAnimationFrame(document.hidden ? () => { animId = requestAnimationFrame(animate); } : animate);
     }
 
     animate();

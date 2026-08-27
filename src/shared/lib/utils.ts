@@ -19,11 +19,14 @@ export const MOOD_LABEL: Record<string, string> = {
   happy: 'Feliz', energetic: 'Energético', neutral: 'Tranquilo',
 };
 
-export const MOOD_EMOJI: Record<string, string> = {
-  stress: '😰', anxiety: '😟', sadness: '😢', tired: '😴',
-  demotivated: '😞', focused: '🎯', motivated: '🚀',
-  happy: '😊', energetic: '⚡', neutral: '😌',
-};
+/*
+ * MOOD_EMOJI foi removido.
+ *
+ * Cada sistema operacional desenhava os rostos de um jeito, entao o mesmo
+ * humor tinha aparencias diferentes, e o leitor de tela anunciava "rosto
+ * desanimado" no meio da frase. O substituto e <MoodIcon /> em
+ * shared/ui/AppIcon.tsx, que usa as cores ja definidas em MOOD_COLOR.
+ */
 
 export const MOOD_COLOR: Record<string, string> = {
   stress: '#ef4444', anxiety: '#f59e0b', sadness: '#a855f7', tired: '#a855f7',

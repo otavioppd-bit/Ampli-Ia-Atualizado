@@ -177,6 +177,9 @@ export function getEmpathicPrefix(mood: MoodType): string {
     motivated: ['Adoro ver essa motivação! Vamos nessa!', 'Energia no auge! Vamos transformar em resultado.'],
     happy: ['Que bom ver você feliz! Vamos manter essa energia.', 'Alegria contagia! Vamos estudar com esse ânimo.'],
     energetic: ['Energia total! Vamos canalizar isso para os estudos.', 'Disposição no máximo! Bora estudar!'],
+    // Humor neutro nao leva prefixo: a resposta vai direto ao ponto.
+    // Nao e um campo esvaziado por engano, e o comportamento documentado
+    // pelo teste "returns empty string for neutral".
     neutral: ['', ''],
   };
   const options = phrases[mood] || [''];

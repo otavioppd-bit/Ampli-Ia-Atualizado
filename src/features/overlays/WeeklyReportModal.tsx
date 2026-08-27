@@ -1,23 +1,49 @@
-import { useMemo, Component, type ReactNode } from 'react';
+import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Flame, Loader2, Moon, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
+import { useBemEstarStore } from '../../stores/bemEstarStore';
 import { Modal } from '../../shared/ui/Modal';
-import { WeeklyReport } from '../../shared/types';
+import {
+  calcularMetricas,
+  destaquesDaSemana,
+  inicioDaSemana,
+  textoLocalDescompressao,
+} from '../../shared/lib/decompressionReport';
+import { aiAvailable, gerarRelatorioDescompressao } from '../../shared/lib/aiService';
+import { bemEstarRepository } from '../../shared/storage/BemEstarRepository';
+import { supabaseRepository } from '../../shared/storage/SupabaseRepository';
+import type { MetricasDescompressao } from '../../shared/types';
 
-class WeeklyReportErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+/**
+ * RELATORIO DE DESCOMPRESSAO SEMANAL.
+ *
+ * Substituiu o painel de "dias ativos / atividades / exercicios". A
+ * diferenca nao e visual: o relatorio antigo media producao, este mede o
+ * que sustenta a producao. Numa sexta-feira ruim, o primeiro e mais uma
+ * cobranca; o segundo e a unica informacao acionavel que resta.
+ *
+ * O texto vem do Gemini com prompt de sistema fixo
+ * (SYSTEM_PROMPT_DESCOMPRESSAO) e, se a IA nao responder, de uma versao
+ * local escrita sob as mesmas regras - porque uma promessa semanal nao
+ * pode depender de rede.
+ */
+
+class LimiteDeErro extends Component<{ children: ReactNode }, { erro: boolean }> {
   constructor(props: { children: ReactNode }) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { erro: false };
   }
-  static getDerivedStateFromError() { return { hasError: true }; }
+  static getDerivedStateFromError() {
+    return { erro: true };
+  }
   render() {
-    if (this.state.hasError) {
+    if (this.state.erro) {
       return (
-        <div className="text-center py-8 animate-fade-up">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-2xl mx-auto mb-3">📊</div>
-          <p className="text-gray-300 font-medium">Não foi possível carregar o relatório</p>
-          <p className="text-sm text-gray-500 mt-1">Tente novamente mais tarde.</p>
-          <button onClick={() => this.setState({ hasError: false })} className="btn-primary mt-4 text-sm">
-            Tentar novamente
+        <div className="text-center py-8">
+          <p className="text-gray-300 font-medium">Nao foi possivel montar o relatorio</p>
+          <p className="text-sm text-gray-500 mt-1">Seus dados da semana continuam salvos.</p>
+          <button onClick={() => this.setState({ erro: false })} className="btn-primary mt-4 text-sm">
+            Tentar de novo
           </button>
         </div>
       );
@@ -26,143 +52,149 @@ class WeeklyReportErrorBoundary extends Component<{ children: ReactNode }, { has
   }
 }
 
-function generateWeeklyReport(logs: any[]): WeeklyReport {
-  try {
-    const now = Date.now();
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-    const recentLogs = logs.filter((l: any) => l && l.timestamp >= sevenDaysAgo);
+function Conteudo() {
+  const { logs, quizResults, gamification, sono, apiKey, session } = useAppStore();
+  const { sessoesOffline, revisoes, relatorios, adicionarRelatorio } = useBemEstarStore();
 
-    if (!recentLogs || recentLogs.length === 0) {
-      const days: { date: string; active: boolean }[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(now - i * 24 * 60 * 60 * 1000);
-        days.push({ date: d.toISOString().split('T')[0], active: false });
+  const [texto, setTexto] = useState('');
+  const [gerando, setGerando] = useState(true);
+  /*
+   * Semana ja processada nesta abertura do modal.
+   *
+   * As metricas sao recalculadas quando o historico de foco chega (carga
+   * assincrona), e sem esta trava o efeito rodaria de novo e pediria um
+   * segundo paragrafo a IA - dois textos diferentes para a mesma semana,
+   * e uma chamada paga a toa.
+   */
+  const semanaProcessada = useRef<string | null>(null);
+  const [sessoesFoco, setSessoesFoco] = useState<{ tipo: string; minutos: number; data: string }[]>([]);
+
+  useEffect(() => {
+    supabaseRepository
+      .loadSessoesFoco()
+      .then(setSessoesFoco)
+      // Silencio proposital: sem o historico de pomodoro o relatorio
+      // ainda sai, apenas sem a linha de minutos em ciclo de foco.
+      .catch(() => {});
+  }, []);
+
+  const metricas: MetricasDescompressao = useMemo(
+    () =>
+      calcularMetricas({
+        logs,
+        sessoesOffline,
+        sessoesFoco,
+        quizzes: quizResults,
+        // O slider do dashboard guarda o valor do dia; sem serie
+        // historica ainda, ele representa a semana.
+        registrosSono: [sono],
+        streak: gamification.streak,
+        revisoesEmDia: revisoes.filter((r) => r.ultimaRevisao && r.ultimaRevisao >= inicioDaSemana()).length,
+      }),
+    [logs, sessoesOffline, sessoesFoco, quizResults, sono, gamification.streak, revisoes],
+  );
+
+  useEffect(() => {
+    let cancelado = false;
+    const semana = inicioDaSemana();
+    const primeiroNome = session?.nome?.split(' ')[0];
+
+    async function montar() {
+      if (semanaProcessada.current === semana) return;
+      semanaProcessada.current = semana;
+
+      // Ja existe o texto desta semana: nao gasta chamada de IA de novo.
+      const existente = relatorios.find((r) => r.semanaInicio === semana);
+      if (existente) {
+        if (!cancelado) {
+          setTexto(existente.textoGerado);
+          setGerando(false);
+        }
+        return;
       }
-      return {
-        diasAtivos: 0,
-        totalAtividades: 0,
-        totalExercicios: 0,
-        performance: 'atencao',
-        analise: 'Sua semana está apenas começando! 🌱 Que tal definir uma meta de 10 minutos de estudo hoje? Cada pequeno passo conta na sua jornada.',
-        days,
-      };
+
+      let redacao = textoLocalDescompressao(metricas, primeiroNome);
+      if (aiAvailable(apiKey)) {
+        try {
+          redacao = await gerarRelatorioDescompressao(metricas, apiKey, primeiroNome);
+        } catch {
+          // Fica o texto local, escrito sob as mesmas regras.
+        }
+      }
+
+      if (cancelado) {
+        semanaProcessada.current = null; // desmontou antes de terminar
+        return;
+      }
+      setTexto(redacao);
+      setGerando(false);
+
+      try {
+        const salvo = await bemEstarRepository.salvarRelatorio(semana, redacao, metricas);
+        if (salvo) adicionarRelatorio(salvo);
+      } catch {
+        // O relatorio ja esta na tela; nao ter sido arquivado nao muda
+        // nada para quem esta lendo agora.
+      }
     }
 
-    const days: { date: string; active: boolean }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now - i * 24 * 60 * 60 * 1000);
-      const dateStr = d.toISOString().split('T')[0];
-      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-      const dayEnd = dayStart + 24 * 60 * 60 * 1000;
-      days.push({ date: dateStr, active: recentLogs.some((l: any) => l.timestamp >= dayStart && l.timestamp < dayEnd) });
-    }
-
-    const diasAtivos = days.filter(d => d.active).length;
-    const totalAtividades = recentLogs.filter((l: any) => l.type === 'atividade').length;
-    const totalExercicios = recentLogs.filter((l: any) => l.type === 'quiz' || l.type === 'exercicio').length;
-    const score = diasAtivos * 2 + totalAtividades * 1 + totalExercicios * 2;
-
-    let performance: WeeklyReport['performance'] = 'regular';
-    let analise = '';
-
-    if (score >= 20) {
-      performance = 'excelente';
-      analise = 'Semana brilhante! 🌟 Sua consistência está no caminho certo. Continue assim e os resultados no ENEM virão naturalmente.';
-    } else if (score >= 12) {
-      performance = 'boa';
-      analise = 'Boa semana! 📈 Com pequenos ajustes na regularidade, você chega ao próximo nível. Tente manter uma média de 1h por dia.';
-    } else if (score >= 6) {
-      performance = 'regular';
-      analise = 'Semana regular. 💪 Identifique quais dias foram mais produtivos e tente replicar. Lembre-se: constância vence intensidade.';
-    } else {
-      performance = 'atencao';
-      analise = 'Toda jornada começa com um primeiro passo. 🌱 Defina metas pequenas para hoje — 10 minutos já fazem diferença. Você consegue!';
-    }
-
-    return { diasAtivos, totalAtividades, totalExercicios, performance, analise, days };
-  } catch (e) {
-    console.warn('Erro ao gerar relatório semanal:', e);
-    const days: { date: string; active: boolean }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-      days.push({ date: d.toISOString().split('T')[0], active: false });
-    }
-    return {
-      diasAtivos: 0,
-      totalAtividades: 0,
-      totalExercicios: 0,
-      performance: 'atencao',
-      analise: 'Não foi possível analisar seus dados esta semana. 🌱 Continue estudando e o relatório será gerado automaticamente na próxima semana.',
-      days,
+    void montar();
+    return () => {
+      cancelado = true;
     };
-  }
-}
+  }, [metricas, apiKey]);
 
-function ReportContent() {
-  const { logs, gamification } = useAppStore();
-  const report = useMemo(() => {
-    try {
-      return generateWeeklyReport(logs);
-    } catch {
-      const days: { date: string; active: boolean }[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-        days.push({ date: d.toISOString().split('T')[0], active: false });
-      }
-      return { diasAtivos: 0, totalAtividades: 0, totalExercicios: 0, performance: 'atencao' as const, analise: 'Continue estudando!', days };
-    }
-  }, [logs]);
-
-  const perfStyles: Record<string, string> = {
-    excelente: 'text-emerald-400 bg-emerald-500/10',
-    boa: 'text-amber-400 bg-amber-500/10',
-    regular: 'text-orange-400 bg-orange-500/10',
-    atencao: 'text-red-400 bg-red-500/10',
-  };
+  const destaques = destaquesDaSemana(metricas);
 
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
-        <h3 className="text-xs text-gray-500 uppercase tracking-wider font-medium">Atividades</h3>
-        <div className="flex gap-1.5">
-          {report.days.map((day, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-              <div className={`w-full aspect-square rounded-xl transition-all ${day.active ? 'bg-emerald-500 shadow-[0_0_16px_rgba(16,185,129,0.2)]' : 'bg-white/[0.03]'}`} />
-              <span className="text-[10px] text-gray-600 font-medium">
-                {new Date(day.date).toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0, 2)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'Dias Ativos', value: `${report.diasAtivos}/7` },
-          { label: 'Atividades', value: report.totalAtividades },
-          { label: 'Exercícios', value: report.totalExercicios },
-        ].map(s => (
-          <div key={s.label} className="text-center glass-light rounded-xl p-3">
-            <p className="text-xl font-bold text-white tabular-nums">{s.value}</p>
-            <p className="text-[10px] text-gray-500 mt-0.5">{s.label}</p>
+      <div className="grid grid-cols-2 gap-3">
+        {destaques.map((d) => (
+          <div key={d.rotulo} className="glass-light rounded-xl p-3">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wide">{d.rotulo}</p>
+            <p className="text-2xl font-bold text-white tabular-nums mt-1">{d.valor}</p>
+            <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">{d.nota}</p>
           </div>
         ))}
       </div>
 
-      <div className="text-center">
-        <span className={`inline-block px-4 py-1.5 rounded-full text-sm font-semibold ${perfStyles[report.performance]}`}>
-          {report.performance === 'excelente' && '⭐ Excelente'}
-          {report.performance === 'boa' && '👍 Boa'}
-          {report.performance === 'regular' && '📊 Regular'}
-          {report.performance === 'atencao' && '🌱 Começando'}
-        </span>
+      <div className="rounded-2xl border border-emerald-500/15 bg-gradient-to-br from-emerald-500/[0.07] to-transparent p-4">
+        <p className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-emerald-400/80 mb-2">
+          <Sparkles size={13} /> Sua semana
+        </p>
+        {gerando ? (
+          <p className="flex items-center gap-2 text-sm text-gray-400">
+            <Loader2 size={14} className="animate-spin" /> Lendo o que voce fez nesta semana...
+          </p>
+        ) : (
+          <p className="text-sm text-gray-200 leading-relaxed">{texto}</p>
+        )}
       </div>
 
-      <p className="text-sm text-gray-300 leading-relaxed">{report.analise}</p>
-
-      <div className="text-center text-xs text-gray-500 flex items-center justify-center gap-1.5">
-        <span>🔥 Streak atual: <strong className="text-white">{gamification.streak}</strong> dias</span>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="glass-light rounded-xl py-3">
+          <ShieldCheck size={16} className="text-cyan-400 mx-auto" />
+          <p className="text-sm font-bold text-white tabular-nums mt-1">{metricas.minutosOffline}</p>
+          <p className="text-[10px] text-gray-500">min offline</p>
+        </div>
+        <div className="glass-light rounded-xl py-3">
+          <Moon size={16} className="text-violet-400 mx-auto" />
+          <p className="text-sm font-bold text-white tabular-nums mt-1">
+            {metricas.sessoesMadrugada}
+          </p>
+          <p className="text-[10px] text-gray-500">noites de madrugada</p>
+        </div>
+        <div className="glass-light rounded-xl py-3">
+          <Flame size={16} className="text-amber-400 mx-auto" />
+          <p className="text-sm font-bold text-white tabular-nums mt-1">{metricas.streak}</p>
+          <p className="text-[10px] text-gray-500">dias seguidos</p>
+        </div>
       </div>
+
+      <p className="text-[11px] text-gray-600 text-center leading-relaxed">
+        Este relatorio nao mede acertos. Ele registra o que sustentou a sua semana - e isso tambem
+        chega para quem acompanha voce.
+      </p>
     </div>
   );
 }
@@ -172,10 +204,14 @@ export function WeeklyReportModal() {
   if (!showWeeklyReport) return null;
 
   return (
-    <Modal open={showWeeklyReport} onClose={() => setShowWeeklyReport(false)} title="📊 Relatório Semanal">
-      <WeeklyReportErrorBoundary>
-        <ReportContent />
-      </WeeklyReportErrorBoundary>
+    <Modal
+      open={showWeeklyReport}
+      onClose={() => setShowWeeklyReport(false)}
+      title="Relatorio de descompressao"
+    >
+      <LimiteDeErro>
+        <Conteudo />
+      </LimiteDeErro>
     </Modal>
   );
 }
