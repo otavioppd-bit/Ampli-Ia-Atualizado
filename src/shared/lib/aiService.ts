@@ -319,13 +319,61 @@ export interface SendMessageToGeminiOptions {
  * Suporta histórico recente (últimas 8 mensagens), persona ativa e imagens.
  * Lança erro amigável em pt-BR em caso de falha (o ChatPage trata o catch).
  */
+/**
+ * Monta o system instruction do professor selecionado.
+ *
+ * TRES PROBLEMAS QUE ESTA FUNCAO RESOLVE, todos aparecidos ao ler o
+ * prompt que de fato era enviado:
+ *
+ * 1. O LIMITE ERA SUGESTAO. "Responda apenas sobre matematica" ia solto
+ *    no meio de um paragrafo, sem dizer o que fazer quando a pergunta
+ *    fosse de outra materia - entao o modelo respondia assim mesmo. Com
+ *    escopo declarado, a regra vira secao propria e diz o desfecho:
+ *    nomear a area, indicar o professor certo, nao responder o conteudo.
+ *
+ * 2. TOM CONTRADITORIO. O prompt base pede frases curtas e linguagem
+ *    acessivel; as instrucoes antigas pediam "estilo analitico de
+ *    pesquisador". Instrucao contraditoria nao e cumprida pela metade -
+ *    o modelo escolhe uma. Agora a precedencia esta escrita.
+ *
+ * 3. CANSACO NAO E FORA DE ESCOPO. Um professor que responde "isso nao
+ *    e materia minha" para quem disse que nao esta aguentando quebra o
+ *    proposito do app inteiro. A excecao e explicita.
+ */
+export function montarInstrucaoDaPersona(persona: ChatPersona | null): string {
+  if (!persona) return SAGUI_SYSTEM_PROMPT;
+
+  const partes = [
+    SAGUI_SYSTEM_PROMPT,
+    `PAPEL: ${persona.name}. ${persona.instruction}`,
+  ];
+
+  if (persona.escopo) {
+    partes.push(
+      [
+        `ESCOPO: voce responde somente sobre ${persona.escopo}.`,
+        'Se a pergunta for de outra materia, diga em uma frase que o tema e de outra area, indique qual professor do app cobre isso (Mentor ENEM, Prof. Matematica, Prof. Portugues, Prof. Ciencias ou Prof. Humanas) e nao responda o conteudo pedido.',
+        'Se houver uma ponte real com a sua materia, ofereca essa ponte em uma frase.',
+        'EXCECAO: cansaco, ansiedade, medo da prova ou desanimo NUNCA sao fora de escopo. Acolha em uma frase antes de voltar ao conteudo.',
+      ].join(' '),
+    );
+  }
+
+  partes.push(
+    'PRECEDENCIA: em caso de conflito, o CONTEUDO segue as regras do papel e do escopo; o TOM segue o do Sagui (frases curtas, linguagem acessivel, sem jargao desnecessario).',
+  );
+
+  // Blocos separados por linha em branco: o modelo trata cada secao
+  // (PAPEL, ESCOPO, PRECEDENCIA) como uma regra, nao como um paragrafo
+  // corrido de onde ele escolhe o que seguir.
+  return partes.join('\n\n');
+}
+
 export async function sendMessageToGemini(
   userMessage: string,
   { apiKey, persona = null, history = [], imageBase64, signal }: SendMessageToGeminiOptions,
 ): Promise<string> {
-  const systemInstruction = persona
-    ? `${SAGUI_SYSTEM_PROMPT} Sua especialidade atual: ${persona.name}. ${persona.instruction} Mantenha o tom acolhedor e direto do Sagui.`
-    : SAGUI_SYSTEM_PROMPT;
+  const systemInstruction = montarInstrucaoDaPersona(persona);
 
   const contents: { role: 'user' | 'model'; parts: any[] }[] = [];
   for (const msg of history.slice(-8)) {

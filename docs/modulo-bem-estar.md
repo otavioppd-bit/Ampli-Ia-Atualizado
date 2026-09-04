@@ -301,6 +301,36 @@ features, treino), `idleTracker` (as três condições e o cooldown),
 
 ---
 
+## Personas: o professor de matéria fica na matéria
+
+`ChatPersona` ganhou o campo `escopo`, e `montarInstrucaoDaPersona()`
+(em `aiService.ts`) monta o system instruction em blocos: **PAPEL**,
+**ESCOPO** e **PRECEDÊNCIA**. Antes o limite era uma frase solta
+("responda apenas sobre matemática") no meio de um parágrafo, sem dizer
+o desfecho para pergunta de fora — e disputando espaço com um pedido de
+tom oposto ("estilo analítico de pesquisador" contra "frases curtas,
+linguagem acessível"). Instrução contraditória não é cumprida pela
+metade: o modelo escolhe uma.
+
+Agora o bloco de escopo diz o que fazer: nomear a área, indicar o
+professor certo do app, não responder o conteúdo — e traz a exceção que
+o produto exige: **cansaço, ansiedade e medo da prova nunca são fora de
+escopo**. Um professor que responde "isso não é comigo" para quem disse
+que não está aguentando quebraria o propósito do app.
+
+Persona criada pelo usuário continua sem escopo: inventar um limite que
+ele não pediu faria a persona dele recusar as próprias perguntas.
+
+Migração `012_persona_ativa_texto.sql` corrige o efeito colateral que
+existia junto: `preferencias.persona_ativa_id` era `bigint`, e os
+professores embutidos têm id em texto (`prof_matematica`), então a
+escolha era gravada como `NULL` e o app voltava ao Mentor geral depois
+de um F5.
+
+Coberto por `src/shared/lib/__tests__/personaEscopo.test.ts`.
+
+---
+
 ## Estado da implantação
 
 O código está completo e verificado; o que falta é ato de operação, não
@@ -308,9 +338,9 @@ de desenvolvimento:
 
 | Item | Estado |
 |---|---|
-| Migrações 010/011 | **pendente no projeto Supabase** — validadas em Postgres real, mas ainda não aplicadas (as tabelas retornam `PGRST205` na API) |
+| Migrações 010/011/012 | **pendente no projeto Supabase** — validadas em Postgres real, mas ainda não aplicadas (as tabelas retornam `PGRST205` na API) |
 | Psicólogos cadastrados | nenhum — depende de `registrar_psicologo()` após a migração |
 | Worker publicado | não — sem `VITE_AI_BASE_URL` no `.env`, o app usa a chave Gemini pessoal do aluno e o player de áudio cai na voz do sistema |
 | Pagamento | modo demonstração enquanto `MP_ACCESS_TOKEN` não existir |
 
-Para aplicar: SQL Editor do Supabase, `010` e depois `011`, uma vez cada.
+Para aplicar: SQL Editor do Supabase, `010`, `011` e `012`, nessa ordem, uma vez cada.

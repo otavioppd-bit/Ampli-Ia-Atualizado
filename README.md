@@ -24,7 +24,8 @@ ligas colaborativas e dashboards multi-perfil (aluno, educacional, pais).
 
 ### 👨‍🎓 Aluno
 - **Central de Comando** - Dashboard com plano do dia, SSC (sono/cansaço/humor), streak, progresso XP
-- **Mentor IA** - Chat com personas customizáveis, reconhecimento emocional, busca na base ENEM
+- **Mentor IA** - Chat com 5 modos temáticos (ENEM Geral, Exatas, Natureza, Humanas, Vestibulares), busca em provas oficiais com badge de fonte consultada, método socrático e densidade adaptada ao horário
+- **Redação por foto** - Fotografe a folha do caderno: OCR da letra manuscrita + correção pelas 5 competências, com imagem e transcrição lado a lado
 - **Quiz Adaptativo** - Questões geradas por IA por matéria/tópico, flashcards do Caderno
 - **Redação** - Corretor offline com 5 competências ENEM (0–1000)
 - **Ligas de Estudo** - Salas colaborativas com chat WhatsApp, desafios diários, metas e ranking
@@ -233,6 +234,8 @@ ordem** no SQL Editor do Supabase:
 ```
 supabase/migrations/010_bemestar_marketplace_foco.sql   # tabelas
 supabase/migrations/011_bemestar_funcoes_rls.sql        # funções, RLS, seeds
+supabase/migrations/012_persona_ativa_texto.sql         # persona ativa em texto
+supabase/migrations/013_redacao_por_foto.sql            # bucket essay_scans + colunas da foto
 ```
 
 Para cadastrar um profissional (a conta precisa existir no app antes):
@@ -256,7 +259,8 @@ Postgres real (PGlite/WASM), cria usuários e confere RLS, constraints e
 as fórmulas duplicadas entre banco e cliente. O worker tem o mesmo
 tratamento em `server/__tests__/worker.test.mjs`.
 
-Detalhes de arquitetura e das decisões: [`docs/modulo-bem-estar.md`](docs/modulo-bem-estar.md).
+Detalhes de arquitetura e das decisões: [`docs/modulo-bem-estar.md`](docs/modulo-bem-estar.md)
+e [`docs/chat-tematico-e-redacao-por-foto.md`](docs/chat-tematico-e-redacao-por-foto.md).
 App nativo do Escudo de Dopamina: [`mobile/react-native/`](mobile/react-native/README.md).
 
  - 

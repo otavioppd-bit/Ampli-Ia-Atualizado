@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookMarked, Lightbulb, PenLine, Trophy } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
+import { RedacaoFoto } from './RedacaoFoto';
 import { GlassCard } from '../../shared/ui/GlassCard';
 import { EmptyState } from '../../shared/ui/EmptyState';
 import { m, useReducedMotion } from 'motion/react';
@@ -312,6 +313,18 @@ export function EssayPage() {
           </button>
         </div>
       </GlassCard>
+
+      {/* Redacao escrita a mao: entra logo abaixo do editor porque e a
+          MESMA tarefa por outro caminho - quem escreveu no caderno nao
+          deveria precisar digitar tudo de novo para receber nota. */}
+      <RedacaoFoto
+        tema={tema}
+        onUsarTranscricao={(transcrito) => {
+          setText(transcrito);
+          setToast('Transcrição carregada no editor. Revise e corrija de novo se quiser.', 'info');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
 
       {lastCorrection && (
         <GlassCard>

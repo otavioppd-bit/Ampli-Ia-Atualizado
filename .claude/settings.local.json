@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(npm run *)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:5180/\" -UseBasicParsing -TimeoutSec 10; \"STATUS: $\\($r.StatusCode\\)\" } catch { \"ERRO: $\\($_.Exception.Message\\)\" })"
+    ]
+  }
+}

@@ -92,6 +92,22 @@ export interface ChatMessage {
   timestamp: number;
   mood?: MoodType;
   image?: string;
+
+  /**
+   * Grounding: de onde a resposta veio.
+   *
+   * Vive so na sessao - chat_mensagens nao tem coluna para isso, e
+   * guardar o link de uma busca que expira teria pouco valor depois. O
+   * que importa e o aluno enxergar a procedencia NA HORA de ler a
+   * resposta, que e quando ele decide se confia.
+   */
+  fontes?: { titulo: string; uri: string; dominio: string }[];
+  /** A busca do Google foi de fato usada nesta resposta. */
+  groundingUsado?: boolean;
+  /** A resposta cita banca + ano (ex.: "ENEM 2019"). */
+  citouProva?: boolean;
+  /** Modo tematico ativo quando a resposta foi gerada. */
+  modoChat?: string;
 }
 
 export interface KBEntry {
@@ -198,6 +214,16 @@ export interface ChatPersona {
   color: string;
   instruction: string;
   createdAt: number;
+  /**
+   * Materia a que este professor se limita.
+   *
+   * So os professores embutidos tem escopo; persona criada pelo usuario
+   * fica sem, e nesse caso nenhuma regra de recusa e aplicada - inventar
+   * um limite que o usuario nao pediu faria a persona dele recusar as
+   * proprias perguntas. Quando existe, vira uma regra explicita no
+   * system instruction (ver montarInstrucaoDaPersona em aiService).
+   */
+  escopo?: string;
 }
 
 // ===== School / Class / Ranking =====

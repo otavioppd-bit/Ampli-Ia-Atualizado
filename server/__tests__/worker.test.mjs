@@ -258,3 +258,263 @@ describe('/notify/drain', () => {
     expect(r.dados.enviadas).toBe(0);
   });
 });
+
+/* ===================================================================
+   Rotas novas: chat tematico com grounding e correcao por foto.
+   =================================================================== */
+
+const respostaGeminiTexto = (texto, grounding) =>
+  json({
+    candidates: [
+      {
+        content: { parts: [{ text: texto }] },
+        ...(grounding ? { groundingMetadata: grounding } : {}),
+      },
+    ],
+  });
+
+describe('/api/chat/completions', () => {
+  const mundoChat = () => [
+    ['generativelanguage', () =>
+      respostaGeminiTexto('Vamos por partes: o que voce ja sabe sobre funcao afim?', {
+        webSearchQueries: ['funcao afim enem 2019'],
+        groundingChunks: [
+          { web: { uri: 'https://download.inep.gov.br/prova.pdf', title: 'Prova ENEM 2019' } },
+        ],
+      })],
+  ];
+
+  it('monta o prompt no servidor a partir do modo e da hora', async () => {
+    const r = await chamar('/api/chat/completions', {
+      corpo: { modo: 'exatas', horaLocal: 2, mensagens: [{ role: 'user', text: 'como resolvo 2x=8?' }] },
+      respostas: mundoChat(),
+    });
+
+    expect(r.status).toBe(200);
+    const system = saidaPara(r, 'generativelanguage').body.systemInstruction.parts[0].text;
+
+    // O cliente manda contexto; a INSTRUCAO e do servidor.
+    expect(system).toContain('MODO ATIVO: Matemática & Exatas');
+    expect(system).toContain('Nao entregue a resposta final de imediato');
+    expect(system).toContain('120 palavras'); // densidade de madrugada
+  });
+
+  it('liga a busca e devolve as fontes que viram badges', async () => {
+    const r = await chamar('/api/chat/completions', {
+      corpo: { modo: 'vestibulares', horaLocal: 20, mensagens: [{ role: 'user', text: 'questao de fuvest' }] },
+      respostas: mundoChat(),
+    });
+
+    expect(saidaPara(r, 'generativelanguage').body.tools).toBeDefined();
+    expect(r.dados.groundingUsado).toBe(true);
+    expect(r.dados.fontes[0].dominio).toBe('download.inep.gov.br');
+    expect(r.dados.consultas).toEqual(['funcao afim enem 2019']);
+  });
+
+  it('usa a ferramenta de busca certa para cada familia de modelo', async () => {
+    const r15 = await chamar('/api/chat/completions', {
+      corpo: { mensagens: [{ role: 'user', text: 'oi' }] },
+      respostas: mundoChat(),
+    });
+    expect(saidaPara(r15, 'generativelanguage').body.tools[0]).toHaveProperty('google_search_retrieval');
+
+    const r20 = await chamar('/api/chat/completions', {
+      corpo: { mensagens: [{ role: 'user', text: 'oi' }] },
+      env: { ...ENV, GEMINI_MODEL_CHAT: 'gemini-2.0-flash' },
+      respostas: mundoChat(),
+    });
+    expect(saidaPara(r20, 'generativelanguage').body.tools[0]).toHaveProperty('google_search');
+  });
+
+  it('sem busca disponivel, responde sem fonte em vez de derrubar a conversa', async () => {
+    let primeira = true;
+    const r = await chamar('/api/chat/completions', {
+      corpo: { mensagens: [{ role: 'user', text: 'oi' }] },
+      respostas: [
+        ['generativelanguage', () => {
+          if (primeira) {
+            primeira = false;
+            return json({ error: { message: 'Search Grounding is not supported' } }, 400);
+          }
+          return respostaGeminiTexto('Resposta sem busca.');
+        }],
+      ],
+    });
+
+    expect(r.status).toBe(200);
+    expect(r.dados.texto).toBe('Resposta sem busca.');
+    expect(r.dados.groundingUsado).toBe(false);
+    const chamadas = r.saidas.filter((s) => s.url.includes('generativelanguage'));
+    expect(chamadas).toHaveLength(2);
+    expect(chamadas[1].body.tools).toBeUndefined();
+  });
+
+  it('marca quando a resposta cita banca e ano', async () => {
+    const r = await chamar('/api/chat/completions', {
+      corpo: { mensagens: [{ role: 'user', text: 'oi' }] },
+      respostas: [['generativelanguage', () => respostaGeminiTexto('Isso caiu no ENEM 2019, questao 136.')]],
+    });
+    expect(r.dados.citouProva).toBe(true);
+  });
+
+  it('modo invalido cai no geral; conversa vazia e recusada', async () => {
+    const r = await chamar('/api/chat/completions', {
+      corpo: { modo: 'hackeado', mensagens: [{ role: 'user', text: 'oi' }] },
+      respostas: mundoChat(),
+    });
+    expect(r.dados.modo).toBe('enem_geral');
+
+    const vazia = await chamar('/api/chat/completions', { corpo: { mensagens: [] } });
+    expect(vazia.status).toBe(400);
+  });
+
+  it('nunca combina saida estruturada com busca (a API recusa as duas juntas)', async () => {
+    const r = await chamar('/api/chat/completions', {
+      corpo: { mensagens: [{ role: 'user', text: 'oi' }] },
+      respostas: mundoChat(),
+    });
+    expect(saidaPara(r, 'generativelanguage').body.generationConfig.responseMimeType).toBeUndefined();
+  });
+});
+
+describe('/api/essays/upload-and-grade', () => {
+  const CORRECAO = {
+    transcription: 'A '.repeat(200),
+    detected_theme: 'Inclusão digital',
+    scores: {
+      competence_1: { score: 160, feedback: 'x' },
+      competence_2: { score: 200, feedback: 'x' },
+      competence_3: { score: 160, feedback: 'x' },
+      competence_4: { score: 200, feedback: 'x' },
+      competence_5: { score: 160, feedback: 'x' },
+    },
+    total_score: 999,
+    strengths: ['a'],
+    actionable_improvements: ['b'],
+  };
+
+  const mundoVisao = (correcao = CORRECAO) => [
+    ['/auth/v1/user', () => json({ id: USUARIO })],
+    ['/storage/v1/object/sign/', () => json({ signedURL: '/object/sign/essay_scans/x?token=y' })],
+    ['/storage/v1/object/', () => json({ Key: 'essay_scans/x' })],
+    ['/rest/v1/redacoes', () => json([{ id: 77 }])],
+    ['generativelanguage', () => respostaGeminiTexto(JSON.stringify(correcao))],
+  ];
+
+  async function enviarFoto(opcoes = {}) {
+    const form = new FormData();
+    const bytes = new Uint8Array(1024).fill(120);
+    form.append('imagem', new File([bytes], 'redacao.jpg', { type: opcoes.tipo ?? 'image/jpeg' }));
+    if (opcoes.tema) form.append('tema', opcoes.tema);
+
+    saidas = [];
+    const rotas = opcoes.respostas ?? mundoVisao();
+    vi.stubGlobal('fetch', async (url, init = {}) => {
+      const u = String(url);
+      let corpo = null;
+      try {
+        corpo = typeof init.body === 'string' ? JSON.parse(init.body) : null;
+      } catch {
+        corpo = null;
+      }
+      saidas.push({ url: u, method: init.method || 'GET', body: corpo });
+      for (const [padrao, resposta] of rotas) if (u.includes(padrao)) return resposta();
+      return json({});
+    });
+
+    const resposta = await worker.fetch(
+      new Request('https://worker.dev/api/essays/upload-and-grade', {
+        method: 'POST',
+        headers: opcoes.semSessao ? {} : { 'X-Supabase-Auth': 'jwt' },
+        body: form,
+      }),
+      opcoes.env ?? ENV,
+    );
+
+    let dados = null;
+    try {
+      dados = JSON.parse(await resposta.clone().text());
+    } catch {
+      /* nao-json */
+    }
+    return { status: resposta.status, dados, saidas };
+  }
+
+  it('exige sessao: a foto e material escolar de um menor', async () => {
+    const r = await enviarFoto({ semSessao: true });
+    expect(r.status).toBe(401);
+    expect(saidaPara(r, 'generativelanguage')).toBeUndefined();
+  });
+
+  it('recusa arquivo que nao seja imagem', async () => {
+    const r = await enviarFoto({ tipo: 'application/pdf' });
+    expect(r.status).toBe(415);
+  });
+
+  it('sobe a foto no bucket privado, dentro da pasta do dono', async () => {
+    const r = await enviarFoto({ tema: 'Inclusão digital' });
+    const upload = r.saidas.find((s) => s.url.includes('/storage/v1/object/essay_scans/'));
+    expect(upload).toBeDefined();
+    expect(upload.url).toContain('essay_scans/' + USUARIO + '/');
+    expect(upload.method).toBe('POST');
+  });
+
+  it('faz OCR e correcao numa unica chamada, com JSON estruturado', async () => {
+    const r = await enviarFoto();
+    const chamadas = r.saidas.filter((s) => s.url.includes('generativelanguage'));
+    expect(chamadas).toHaveLength(1);
+
+    const corpo = chamadas[0].body;
+    expect(corpo.generationConfig.responseMimeType).toBe('application/json');
+    expect(corpo.generationConfig.responseSchema.required).toContain('transcription');
+    expect(corpo.contents[0].parts[0].text).toContain('TRANSCRIÇÃO');
+    expect(corpo.contents[0].parts[1].inlineData.mimeType).toBe('image/jpeg');
+    expect(corpo.contents[0].parts[1].inlineData.data.length).toBeGreaterThan(100);
+  });
+
+  it('devolve o contrato completo e recalcula a soma errada do modelo', async () => {
+    const r = await enviarFoto();
+    expect(r.status).toBe(200);
+    expect(Object.keys(r.dados)).toEqual(
+      expect.arrayContaining([
+        'transcription', 'detected_theme', 'scores', 'total_score',
+        'strengths', 'actionable_improvements', 'essay_id', 'image_url',
+      ]),
+    );
+    expect(r.dados.total_score).toBe(880); // 160+200+160+200+160, nao os 999 do modelo
+    expect(r.dados.essay_id).toBe(77);
+    expect(r.dados.image_url).toContain('/storage/v1/object/sign/');
+  });
+
+  it('grava no historico marcando a origem foto', async () => {
+    const r = await enviarFoto({ tema: 'Inclusão digital' });
+    const insert = saidaPara(r, '/rest/v1/redacoes');
+    expect(insert.body.origem).toBe('foto');
+    expect(insert.body.user_id).toBe(USUARIO);
+    expect(insert.body.nota_final).toBe(880);
+    expect(insert.body.imagem_path).toContain(USUARIO);
+    expect(insert.body.transcricao.length).toBeGreaterThan(100);
+  });
+
+  it('foto ilegivel nao vira nota zero no historico', async () => {
+    const r = await enviarFoto({ respostas: mundoVisao({ ...CORRECAO, transcription: 'nao da para ler' }) });
+    expect(r.dados.ilegivel).toBe(true);
+    // Zero seria avaliacao do texto; o problema foi a imagem.
+    expect(saidaPara(r, '/rest/v1/redacoes')).toBeUndefined();
+  });
+
+  it('se o historico falhar, a correcao ainda chega ao aluno', async () => {
+    const r = await enviarFoto({
+      respostas: [
+        ['/auth/v1/user', () => json({ id: USUARIO })],
+        ['/storage/v1/object/sign/', () => json({ signedURL: '/object/sign/x' })],
+        ['/storage/v1/object/', () => json({ Key: 'x' })],
+        ['/rest/v1/redacoes', () => json({ message: 'coluna origem nao existe' }, 400)],
+        ['generativelanguage', () => respostaGeminiTexto(JSON.stringify(CORRECAO))],
+      ],
+    });
+    expect(r.status).toBe(200);
+    expect(r.dados.total_score).toBe(880);
+    expect(r.dados.essay_id).toBeNull();
+  });
+});

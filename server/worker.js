@@ -29,9 +29,38 @@
  *   PUBLIC_APP_URL        para os links dos e-mails
  */
 
+import {
+  montarSystemInstructionChat,
+  ferramentasDeBusca,
+  extrairFontes,
+  detectarCitacaoDeProva,
+  modoValido,
+  MODO_PADRAO,
+} from './chatPrompt.js';
+import {
+  ESQUEMA_CORRECAO,
+  promptCorrecaoFoto,
+  normalizarCorrecao,
+  pareceFotoIlegivel,
+  MIMES_ACEITOS,
+  TAMANHO_MAXIMO_BYTES,
+} from './essaySchema.js';
+
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_MODEL = 'gemini-2.0-flash';
 const TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
+
+/*
+ * Modelos das duas funcionalidades novas.
+ *
+ * Ficam em variavel de ambiente porque a familia importa: o nome da
+ * ferramenta de busca muda entre 1.5 e 2.x (ver ferramentasDeBusca) e a
+ * saida estruturada tem suporte diferente. Trocar o modelo no painel do
+ * provedor nao deve exigir deploy.
+ */
+const MODELO_CHAT_PADRAO = 'gemini-1.5-flash';
+const MODELO_VISAO_PADRAO = 'gemini-1.5-flash';
+const BUCKET_REDACOES = 'essay_scans';
 
 function cors(env) {
   const origin = env.ALLOWED_ORIGIN || '*';
@@ -100,6 +129,100 @@ async function supabasePatch(env, caminho, corpo) {
     body: JSON.stringify(corpo),
   });
   if (!resposta.ok) throw new Error(`patch ${caminho}: ${resposta.status}`);
+}
+
+async function supabaseInsert(env, tabela, linha) {
+  const resposta = await fetch(`${env.SUPABASE_URL}/rest/v1/${tabela}`, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify(linha),
+  });
+  if (!resposta.ok) throw new Error(`insert ${tabela}: ${resposta.status} ${await resposta.text()}`);
+  return resposta.json();
+}
+
+/**
+ * Sobe a foto da redação no bucket privado.
+ *
+ * O caminho começa pelo id do usuário (`<uid>/<uuid>.<ext>`): é o que
+ * permite a policy de Storage autorizar por dono sem consultar tabela
+ * nenhuma. Bucket privado — a imagem só sai daqui por URL assinada.
+ */
+async function subirImagem(env, caminho, bytes, contentType) {
+  const resposta = await fetch(
+    `${env.SUPABASE_URL}/storage/v1/object/${BUCKET_REDACOES}/${caminho}`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': contentType,
+        'x-upsert': 'true',
+      },
+      body: bytes,
+    },
+  );
+  if (!resposta.ok) throw new Error(`upload: ${resposta.status} ${await resposta.text()}`);
+  return `${BUCKET_REDACOES}/${caminho}`;
+}
+
+/** URL temporária para a tela exibir a foto ao lado da correção. */
+async function assinarImagem(env, caminho, segundos = 60 * 60 * 24 * 7) {
+  const resposta = await fetch(
+    `${env.SUPABASE_URL}/storage/v1/object/sign/${BUCKET_REDACOES}/${caminho}`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ expiresIn: segundos }),
+    },
+  );
+  if (!resposta.ok) return null;
+  const dados = await resposta.json();
+  return dados?.signedURL ? `${env.SUPABASE_URL}/storage/v1${dados.signedURL}` : null;
+}
+
+/**
+ * ArrayBuffer -> base64 em blocos.
+ *
+ * `btoa(String.fromCharCode(...bytes))` estoura a pilha em arquivos de
+ * alguns MB — que é exatamente o tamanho de uma foto de redação.
+ */
+function paraBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const BLOCO = 0x8000;
+  let binario = '';
+  for (let i = 0; i < bytes.length; i += BLOCO) {
+    binario += String.fromCharCode.apply(null, bytes.subarray(i, i + BLOCO));
+  }
+  return btoa(binario);
+}
+
+/** Extrai o JSON da resposta do Gemini, com ou sem cerca de markdown. */
+function jsonDaResposta(texto) {
+  const limpo = String(texto || '').replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+  try {
+    return JSON.parse(limpo);
+  } catch {
+    const inicio = limpo.indexOf('{');
+    const fim = limpo.lastIndexOf('}');
+    if (inicio >= 0 && fim > inicio) return JSON.parse(limpo.slice(inicio, fim + 1));
+    throw new Error('resposta do modelo não é JSON');
+  }
+}
+
+function textoDaResposta(dados) {
+  const partes = dados?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(partes)) return '';
+  return partes.map((p) => p?.text || '').join('').trim();
 }
 
 /** Confere o JWT do usuário que pediu a cobrança (evita pagar pelo agendamento alheio). */
@@ -483,6 +606,254 @@ export default {
         return json({ ok: true, pendentes: pendentes.length, enviadas }, 200, corsHeaders);
       } catch (err) {
         return json({ error: 'drain_falhou', message: String(err && err.message) }, 502, corsHeaders);
+      }
+    }
+
+    // =============================================================
+    // 6. Chat tematico com grounding de vestibulares
+    //
+    // Diferente de /generate (proxy cru, em que o cliente manda o que
+    // quiser), aqui o SERVIDOR monta o system instruction a partir do
+    // modo e da hora, e liga a busca do Google. O cliente manda
+    // contexto, nao instrucao.
+    // =============================================================
+    if (url.pathname === '/api/chat/completions' && request.method === 'POST') {
+      if (!tokenValido(request, env)) return json({ error: 'Unauthorized' }, 401, corsHeaders);
+      if (!env.GEMINI_API_KEY) {
+        return json({ error: 'misconfigured', message: 'Defina GEMINI_API_KEY.' }, 500, corsHeaders);
+      }
+
+      let corpo;
+      try {
+        corpo = await request.json();
+      } catch {
+        return json({ error: 'invalid_json' }, 400, corsHeaders);
+      }
+
+      const mensagens = Array.isArray(corpo.mensagens) ? corpo.mensagens.slice(-10) : [];
+      if (mensagens.length === 0) return json({ error: 'sem_mensagem' }, 400, corsHeaders);
+
+      const modo = modoValido(corpo.modo) ? corpo.modo : MODO_PADRAO;
+      const modelo = env.GEMINI_MODEL_CHAT || MODELO_CHAT_PADRAO;
+
+      const systemInstruction = {
+        parts: [
+          {
+            text: montarSystemInstructionChat({
+              modo,
+              horaLocal: Number(corpo.horaLocal),
+              nomeAluno: String(corpo.nomeAluno || '').slice(0, 60),
+              materiaRecente: String(corpo.materiaRecente || '').slice(0, 60),
+            }),
+          },
+        ],
+      };
+
+      const contents = mensagens
+        .filter((m) => m && typeof m.text === 'string' && m.text.trim())
+        .map((m) => ({
+          role: m.role === 'model' ? 'model' : 'user',
+          parts: [{ text: String(m.text).slice(0, 8000) }],
+        }));
+
+      const generationConfig = { temperature: 0.4, maxOutputTokens: 1024, topP: 0.9 };
+
+      const chamarGemini = async (comBusca) => {
+        const payload = { systemInstruction, contents, generationConfig };
+        // Saida estruturada e busca sao mutuamente exclusivas na API do
+        // Gemini; aqui so a busca importa, entao nao ha responseMimeType.
+        if (comBusca) payload.tools = ferramentasDeBusca(modelo);
+
+        const resposta = await fetch(
+          `${GEMINI_BASE}/${modelo}:generateContent?key=${env.GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          },
+        );
+        return { ok: resposta.ok, status: resposta.status, texto: await resposta.text() };
+      };
+
+      try {
+        const querBusca = env.GROUNDING_DESLIGADO !== '1';
+        let bruta = await chamarGemini(querBusca);
+        let usouBusca = querBusca;
+
+        /*
+         * Repescagem sem busca.
+         *
+         * Grounding depende de modelo, regiao e plano de faturamento. Um
+         * 400 por ferramenta indisponivel derrubaria a conversa inteira e
+         * o aluno so veria "erro". Melhor responder sem fonte - e a
+         * interface deixa claro que nenhuma foi consultada.
+         */
+        if (!bruta.ok && querBusca && bruta.status === 400) {
+          bruta = await chamarGemini(false);
+          usouBusca = false;
+        }
+
+        if (!bruta.ok) {
+          return json(
+            { error: 'gemini_falhou', message: bruta.texto.slice(0, 400) },
+            bruta.status,
+            corsHeaders,
+          );
+        }
+
+        const dados = JSON.parse(bruta.texto);
+        const texto = textoDaResposta(dados);
+        const { fontes, consultas, groundingUsado } = extrairFontes(dados);
+
+        return json(
+          {
+            texto,
+            modo,
+            modelo,
+            fontes,
+            consultas,
+            // Dois sinais distintos, e a interface mostra badges
+            // diferentes: "buscou na web" nao e o mesmo que "citou prova".
+            groundingUsado: usouBusca && groundingUsado,
+            citouProva: detectarCitacaoDeProva(texto),
+          },
+          200,
+          corsHeaders,
+        );
+      } catch (err) {
+        return json({ error: 'chat_erro', message: String(err && err.message) }, 502, corsHeaders);
+      }
+    }
+
+    // =============================================================
+    // 7. Redacao manuscrita: upload + OCR + correcao numa chamada
+    // =============================================================
+    if (url.pathname === '/api/essays/upload-and-grade' && request.method === 'POST') {
+      if (!tokenValido(request, env)) return json({ error: 'Unauthorized' }, 401, corsHeaders);
+      if (!env.GEMINI_API_KEY) {
+        return json({ error: 'misconfigured', message: 'Defina GEMINI_API_KEY.' }, 500, corsHeaders);
+      }
+
+      // A foto e material escolar de um menor de idade: sem sessao, nao entra.
+      const usuario = await usuarioDoToken(env, request);
+      if (!usuario) {
+        return json({ error: 'sem_sessao', message: 'Faca login novamente.' }, 401, corsHeaders);
+      }
+
+      let formulario;
+      try {
+        formulario = await request.formData();
+      } catch {
+        return json({ error: 'form_invalido', message: 'Envie multipart/form-data.' }, 400, corsHeaders);
+      }
+
+      const arquivo = formulario.get('imagem') || formulario.get('file');
+      if (!arquivo || typeof arquivo === 'string') {
+        return json({ error: 'imagem_ausente' }, 400, corsHeaders);
+      }
+
+      const tipo = arquivo.type || 'image/jpeg';
+      if (!MIMES_ACEITOS.includes(tipo)) {
+        return json({ error: 'tipo_invalido', message: `Formato ${tipo} nao aceito.` }, 415, corsHeaders);
+      }
+      if (arquivo.size > TAMANHO_MAXIMO_BYTES) {
+        return json(
+          { error: 'imagem_grande', message: 'A foto passou de 8 MB mesmo depois da compressao.' },
+          413,
+          corsHeaders,
+        );
+      }
+
+      const tema = String(formulario.get('tema') || '').slice(0, 300);
+
+      try {
+        const buffer = await arquivo.arrayBuffer();
+        const extensao = (tipo.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+        const caminho = `${usuario.id}/${crypto.randomUUID()}.${extensao}`;
+
+        // 1) guarda a foto (bucket privado, caminho por dono)
+        await subirImagem(env, caminho, buffer, tipo);
+
+        // 2) OCR + correcao na MESMA chamada: sao duas leituras da mesma
+        //    imagem, e separa-las dobraria custo e latencia - alem de
+        //    permitir que a nota fosse calculada sobre uma transcricao
+        //    diferente da que o aluno le na tela.
+        const modelo = env.GEMINI_MODEL_VISION || MODELO_VISAO_PADRAO;
+        const resposta = await fetch(
+          `${GEMINI_BASE}/${modelo}:generateContent?key=${env.GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    { text: promptCorrecaoFoto(tema) },
+                    { inlineData: { mimeType: tipo, data: paraBase64(buffer) } },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.2,
+                maxOutputTokens: 4096,
+                responseMimeType: 'application/json',
+                responseSchema: ESQUEMA_CORRECAO,
+              },
+            }),
+          },
+        );
+
+        if (!resposta.ok) {
+          return json(
+            { error: 'visao_falhou', message: (await resposta.text()).slice(0, 400) },
+            resposta.status,
+            corsHeaders,
+          );
+        }
+
+        const correcao = normalizarCorrecao(jsonDaResposta(textoDaResposta(await resposta.json())));
+        const ilegivel = pareceFotoIlegivel(correcao);
+        const imagemUrl = await assinarImagem(env, caminho);
+
+        // 3) historico - a mesma tabela da redacao digitada, para o aluno
+        //    acompanhar a evolucao num lugar so.
+        let redacaoId = null;
+        if (!ilegivel) {
+          try {
+            const [linha] = await supabaseInsert(env, 'redacoes', {
+              user_id: usuario.id,
+              tema: tema || correcao.detected_theme,
+              nota_final: correcao.total_score,
+              competencia1: correcao.scores.competence_1.score,
+              competencia2: correcao.scores.competence_2.score,
+              competencia3: correcao.scores.competence_3.score,
+              competencia4: correcao.scores.competence_4.score,
+              competencia5: correcao.scores.competence_5.score,
+              pontos_fortes: correcao.strengths,
+              pontos_melhorar: correcao.actionable_improvements,
+              texto_original: correcao.transcription,
+              origem: 'foto',
+              imagem_path: caminho,
+              transcricao: correcao.transcription,
+              feedback_competencias: correcao.scores,
+            });
+            redacaoId = linha?.id ?? null;
+          } catch (err) {
+            // A correcao ja esta pronta: devolve mesmo assim. Perder o
+            // historico e ruim; perder a correcao depois de o aluno
+            // esperar a leitura de uma folha inteira e pior.
+            console.warn('historico da redacao nao gravado:', err && err.message);
+          }
+        }
+
+        return json(
+          { ...correcao, essay_id: redacaoId, image_url: imagemUrl, image_path: caminho, ilegivel },
+          200,
+          corsHeaders,
+        );
+      } catch (err) {
+        return json({ error: 'correcao_falhou', message: String(err && err.message) }, 502, corsHeaders);
       }
     }
 

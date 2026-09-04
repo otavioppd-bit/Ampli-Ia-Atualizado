@@ -1,11 +1,18 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Brain, Camera, Mic, SendHorizontal, Sparkles, Users, Volume2, VolumeX } from 'lucide-react';
+import { BadgeCheck, Brain, Camera, Link2, Mic, SendHorizontal, Sparkles, TriangleAlert, Users, Volume2, VolumeX } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { searchKB, matchSubject, extractKeywords, SPECIAL_RESPONSES, buildKBFromQuiz } from '../../shared/lib/kbSearch';
 import { getEmpathicPrefix } from '../../shared/lib/emotionEngine';
 import { QUIZ_BANK } from '../../shared/lib/quizBank';
 import { ENEM_KB } from '../../shared/lib/kbEnem';
 import { sendMessageToGemini, aiAvailable } from '../../shared/lib/aiService';
+import {
+  MODOS_CHAT,
+  MODO_PADRAO,
+  acharModo,
+  conversarComMentor,
+  temEndpointDeChat,
+} from '../../shared/lib/chatGrounding';
 import { ChatMessage, Nota, ChatPersona } from '../../shared/types';
 import { playClick, speak, stopSpeech } from '../../shared/lib/sfx';
 import { buildContextGreeting, ultimaMateria } from '../../shared/lib/contextMemory';
@@ -61,12 +68,37 @@ function getBotReply(userMessage: string, mood: string, persona: ChatPersona | n
   const keywords = extractKeywords(userMessage);
   const prefix = getEmpathicPrefix(mood as any);
   if (persona && !isMentor) {
-    const fallback = `Não encontrei informações específicas sobre "${keywords.join(', ') || 'isso'}" na minha base. ${persona.instruction.length > 60 ? `Minha especialidade: ${persona.instruction.slice(0, 100)}...` : `Minha especialidade: ${persona.instruction}`} Que tal reformular dentro da minha área?`;
+    /* Sem IA, o limite da persona tambem precisa aparecer - mas pelo
+       ESCOPO, nao pela instrucao: a instrucao e escrita em segunda
+       pessoa ("Voce ensina...") e ficava esquisita como fala do bot. */
+    const especialidade = persona.escopo ?? persona.name;
+    const fallback = `Não encontrei informações específicas sobre "${keywords.join(', ') || 'isso'}" na minha base local. Minha especialidade é ${especialidade}. Que tal reformular dentro dessa área?`;
     return prefix ? `${prefix}\n\n${fallback}` : fallback;
   }
   const fallback = `Hmm, não encontrei informações sobre "${keywords.join(', ') || 'isso'}" na minha base local.  Tente reformular sua pergunta ou explore as seções Quiz, Redação e Caderno de Estudos!`;
   return prefix ? `${prefix}\n\n${fallback}` : fallback;
 }
+
+/**
+ * Modo tematico -> professor embutido.
+ *
+ * Os dois eixos ja existiam separados no app (persona = quem fala) e o
+ * pedido trouxe um novo (modo = de onde vem o conteudo). Deixar os dois
+ * soltos permitiria a combinacao sem sentido "Prof. Matematica no modo
+ * Humanas". Aqui o modo manda: escolher um modo troca o professor junto.
+ * Persona CRIADA PELO USUARIO continua no comando dela mesma - ver
+ * handleSend.
+ */
+const PERSONA_DO_MODO: Record<string, string> = {
+  enem_geral: 'mentor_enem',
+  exatas: 'prof_matematica',
+  natureza: 'prof_ciencias',
+  humanas: 'prof_humanas',
+  vestibulares: 'mentor_enem',
+};
+
+const PERSONAS_EMBUTIDAS = Object.values(PERSONA_DO_MODO);
+const CHAVE_MODO = 'mm_modo_chat';
 
 const personaBorderColors: Record<string, string> = {
   mentor_enem: 'border-l-amber-500/50',
@@ -95,6 +127,10 @@ export function ChatPage() {
     personas, activePersonaId, setActivePersonaId, setShowPersonaManager, apiKey,
     quizResults, logs } = useAppStore();
   const [input, setInput] = useState('');
+  /* Modo tematico do mentor. Fica no localStorage porque e preferencia de
+     uso, nao dado de conta: quem estuda exatas nao quer reescolher o modo
+     a cada visita. */
+  const [modo, setModo] = useState<string>(() => localStorage.getItem(CHAVE_MODO) || MODO_PADRAO);
   const [isListening, setIsListening] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [hoveredMsg, setHoveredMsg] = useState<string | null>(null);
@@ -105,6 +141,21 @@ export function ChatPage() {
   const abortRef = useRef<AbortController | null>(null);
 
   const activePersona = useMemo(() => personas.find(p => p.id === activePersonaId) || null, [personas, activePersonaId]);
+
+  /* Professor criado pelo usuario tem instrucao propria: nesse caso o
+     modo tematico sai de cena e o caminho antigo (persona) prevalece. */
+  const personaCustomizada = useMemo(
+    () => (activePersona && !PERSONAS_EMBUTIDAS.includes(activePersona.id) ? activePersona : null),
+    [activePersona],
+  );
+
+  const modoAtivo = useMemo(() => acharModo(modo), [modo]);
+
+  function trocarModo(id: string) {
+    setModo(id);
+    localStorage.setItem(CHAVE_MODO, id);
+    setActivePersonaId(PERSONA_DO_MODO[id] ?? 'mentor_enem');
+  }
 
   /* Materia retomada: sai do historico real do aluno (ultimo quiz, depois
      registros de atividade) e so cai na persona como ultimo recurso. */
@@ -159,11 +210,48 @@ export function ChatPage() {
           role: (m.role === 'user' ? 'user' : 'model') as 'user' | 'model',
           text: m.text || (m.image ? '[Anexo de imagem]' : ''),
         }));
-        const reply = await sendMessageToGemini(
-          text || (image ? 'Analise esta imagem de estudo' : 'Olá!'),
-          { apiKey, persona: activePersona, history, imageBase64: image, signal: abortRef.current.signal },
-        );
-        const botMsg: ChatMessage = { id: generateId(), role: 'assistant', text: reply, timestamp: Date.now(), mood };
+        /*
+         * Duas rotas de conversa:
+         *
+         * - MODO TEMATICO (padrao): vai para /api/chat/completions, que
+         *   monta o prompt socratico no servidor e liga a busca. E o unico
+         *   caminho que devolve fontes para os badges.
+         * - PERSONA CUSTOMIZADA: o professor que o proprio aluno criou tem
+         *   instrucao dele; sobrepor um modo tematico ali seria ignorar o
+         *   que ele escreveu.
+         *
+         * Mensagem com imagem tambem segue o caminho antigo: a rota
+         * tematica e de texto, e a leitura de foto de exercicio ja
+         * existia aqui.
+         */
+        let reply: string;
+        let extras: Partial<ChatMessage> = {};
+
+        if (personaCustomizada || image) {
+          reply = await sendMessageToGemini(
+            text || (image ? 'Analise esta imagem de estudo' : 'Olá!'),
+            { apiKey, persona: activePersona, history, imageBase64: image, signal: abortRef.current.signal },
+          );
+        } else {
+          const resposta = await conversarComMentor({
+            modo,
+            mensagens: [...history, { role: 'user', text: text || 'Olá!' }],
+            apiKey,
+            materiaRecente: materiaRetomada || undefined,
+            signal: abortRef.current.signal,
+          });
+          reply = resposta.texto;
+          extras = {
+            fontes: resposta.fontes,
+            groundingUsado: resposta.groundingUsado,
+            citouProva: resposta.citouProva,
+            modoChat: resposta.modo,
+          };
+        }
+
+        const botMsg: ChatMessage = {
+          id: generateId(), role: 'assistant', text: reply, timestamp: Date.now(), mood, ...extras,
+        };
         addChatMessage(botMsg);
         if (!isMuted) { stopSpeech(); speak(reply); }
       } catch (err: any) {
@@ -184,7 +272,7 @@ export function ChatPage() {
         if (!isMuted) { stopSpeech(); speak(reply); }
       }, 400 + Math.random() * 600);
     }
-  }, [chatMessages, addChatMessage, detectAndSetMood, isMuted, activePersona, apiKey]);
+  }, [chatMessages, addChatMessage, detectAndSetMood, isMuted, activePersona, apiKey, modo, personaCustomizada, materiaRetomada]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(input); }
@@ -294,6 +382,44 @@ export function ChatPage() {
         </div>
       </div>
 
+      {/* ============================================================
+          Seletor de modo tematico.
+          Fica ACIMA da fileira de professores porque e ele que decide o
+          que a IA vai buscar; a fileira de baixo passou a servir aos
+          professores que o proprio aluno cria.
+          ============================================================ */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Modo do mentor">
+        {MODOS_CHAT.map((m) => {
+          const ativo = modo === m.id && !personaCustomizada;
+          return (
+            <button
+              key={m.id}
+              role="tab"
+              aria-selected={ativo}
+              onClick={() => trocarModo(m.id)}
+              title={`${m.escopo}. Bancas: ${m.bancas.join(', ')}`}
+              className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                ativo ? 'text-white' : 'glass-light text-gray-400 border-white/[0.04] hover:text-gray-200'
+              }`}
+              style={ativo ? { borderColor: `${m.cor}66`, background: `${m.cor}1a`, color: m.cor } : undefined}
+            >
+              {m.rotulo}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Uma linha honesta sobre a procedencia das respostas neste modo. */}
+      <p className="text-[11px] text-gray-600 -mt-2">
+        {personaCustomizada ? (
+          <>Falando com o seu professor <strong className="text-gray-400">{personaCustomizada.name}</strong> - o modo tematico volta ao escolher um professor da lista.</>
+        ) : temEndpointDeChat() ? (
+          <>Busca ativa em provas oficiais: {modoAtivo.bancas.join(', ')}.</>
+        ) : (
+          <>Sem servidor de busca configurado: as respostas saem do conhecimento do modelo, sem consultar provas. Fontes nao serao exibidas.</>
+        )}
+      </p>
+
       {/* Persona selector cards */}
       <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 scrollbar-none">
         {personas.map(p => {
@@ -371,6 +497,48 @@ export function ChatPage() {
               {msg.text && (
                 <TextoFormatado texto={msg.text} className="text-sm text-gray-200 leading-relaxed" />
               )}
+              {/* ==================================================
+                  Procedencia da resposta.
+                  Verde = a IA abriu a fonte. Ambar = ela citou banca e
+                  ano sem ter consultado nada, que e exatamente o caso em
+                  que o aluno precisa desconfiar. Sem os dois sinais, nada
+                  aparece - badge em toda mensagem viraria ruido.
+                  ================================================== */}
+              {msg.role === 'assistant' && (msg.fontes?.length || msg.citouProva) && (
+                <div className="mt-3 pt-3 border-t border-white/[0.04] space-y-2">
+                  {msg.citouProva && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                        msg.groundingUsado
+                          ? 'bg-emerald-500/10 text-emerald-400'
+                          : 'bg-amber-500/10 text-amber-400'
+                      }`}
+                    >
+                      {msg.groundingUsado ? <BadgeCheck size={11} /> : <TriangleAlert size={11} />}
+                      {msg.groundingUsado ? 'Questão conferida na fonte' : 'Citou prova sem fonte verificada'}
+                    </span>
+                  )}
+
+                  {!!msg.fontes?.length && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {msg.fontes.slice(0, 4).map((f) => (
+                        <a
+                          key={f.uri}
+                          href={f.uri}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={f.titulo}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.04] text-[10px] text-gray-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors max-w-[190px]"
+                        >
+                          <Link2 size={10} className="shrink-0" />
+                          <span className="truncate">{f.dominio}</span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center justify-between mt-3">
                 <span className="text-[10px] text-gray-600">{new Date(msg.timestamp).toLocaleTimeString()}</span>
                 <button

@@ -118,13 +118,33 @@ export const useAppStore = create<AppState>((set, get) => ({
   showTutorial: false,
   tutorialStep: 0,
   personas: [
+    /*
+     * Professores embutidos.
+     *
+     * Duas coisas mudaram aqui em relacao a versao anterior, e as duas
+     * apareceram quando o comportamento foi testado de verdade:
+     *
+     * 1. ESCOPO SEPARADO DA INSTRUCAO. Antes o limite ("responda apenas
+     *    sobre matematica") vivia solto no meio do texto e o modelo o
+     *    tratava como sugestao. Agora o escopo e um campo, e aiService
+     *    transforma isso numa regra explicita, com o que fazer quando a
+     *    pergunta e de outra materia.
+     *
+     * 2. TOM COMPATIVEL COM O SAGUI. As instrucoes pediam "estilo
+     *    analitico de pesquisador" enquanto o prompt base pede frases
+     *    curtas e linguagem acessivel para aluno do noturno. Instrucao
+     *    contraditoria nao e obedecida pela metade: ela e ignorada na
+     *    parte que o modelo escolher.
+     */
     {
       id: 'mentor_enem',
       name: 'Mentor ENEM',
       icon: 'luaCheia',
       color: '#f59e0b',
+      // Sem escopo: este e o generalista, e e para ele que os outros
+      // mandam o aluno quando a pergunta foge da materia.
       instruction:
-        'Você é um mentor de estudos para o ENEM. Ajude o aluno com todas as matérias, dê dicas de estudo, corrija redações, motive e oriente. Responda com rigor de pesquisador, use argumentos claros e baseie suas respostas em conceitos estruturados.',
+        'Voce e o mentor geral do ENEM. Ajuda com qualquer materia, organizacao de estudo e duvidas sobre a prova. Quando a pergunta for muito ampla, escolha um recorte e comece por ele em vez de listar tudo.',
       createdAt: 0,
     },
     {
@@ -132,8 +152,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       name: 'Prof. Matemática',
       icon: 'regua',
       color: '#3b82f6',
+      escopo: 'matemática: álgebra, funções, geometria plana e espacial, estatística, probabilidade, análise combinatória, razão e proporção',
       instruction:
-        'Você é um professor de matemática focado no ENEM. Responda apenas sobre matemática: álgebra, geometria, estatística, probabilidade. Explique com precisão, justifique cada passo e use um estilo analítico de pesquisador.',
+        'Voce ensina matematica para o ENEM. Resolva passo a passo mostrando a conta, um passo por linha, e termine apontando a pegadinha mais comum nesse tipo de questao. Quando o aluno errar, mostre em que passo o raciocinio saiu do trilho antes de dar a resposta certa.',
       createdAt: 0,
     },
     {
@@ -141,8 +162,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       name: 'Prof. Português',
       icon: 'escrita',
       color: '#10b981',
+      escopo: 'língua portuguesa: gramática, interpretação de texto, literatura brasileira e redação',
       instruction:
-        'Você é um professor de português focado no ENEM. Ajude com gramática, interpretação de texto, literatura brasileira e redação. Explique regras com exemplos claros e análise formal, como um pesquisador acadêmico.',
+        'Voce ensina portugues para o ENEM. Explique a regra com um exemplo curto antes da teoria, e sempre mostre a frase errada ao lado da corrigida. Em redacao, aponte a competencia do ENEM que esta em jogo.',
       createdAt: 0,
     },
     {
@@ -150,8 +172,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       name: 'Prof. Ciências',
       icon: 'ciencia',
       color: '#8b5cf6',
+      escopo: 'ciências da natureza: biologia, física e química',
       instruction:
-        'Você é um professor de ciências da natureza focado no ENEM. Responda sobre biologia, física e química. Apresente explicações fundamentadas, use analogias científicas e relacione com evidências de campo.',
+        'Voce ensina ciencias da natureza para o ENEM. Comece pelo fenomeno do cotidiano e so depois nomeie o conceito. Em calculo, deixe a unidade visivel em cada etapa.',
       createdAt: 0,
     },
     {
@@ -159,8 +182,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       name: 'Prof. Humanas',
       icon: 'globo',
       color: '#ec4899',
+      escopo: 'ciências humanas: história, geografia, filosofia e sociologia',
       instruction:
-        'Você é um professor de ciências humanas focado no ENEM. Responda sobre história, geografia, filosofia e sociologia. Contextualize eventos historicamente e use uma abordagem analítica de pesquisador.',
+        'Voce ensina ciencias humanas para o ENEM. Situe o fato no tempo e no espaco, ligue causa e consequencia, e conecte com o Brasil de hoje quando fizer sentido - e assim que a prova costuma cobrar.',
       createdAt: 0,
     },
   ],
@@ -449,9 +473,16 @@ export const useAppStore = create<AppState>((set, get) => ({
      * Silencio proposital: guarda apenas qual professor estava selecionado.
      * Falhar significa reabrir no professor padrao, sem perda de conteudo.
      */
-    supabaseRepository
-      .savePreferencias({ persona_ativa_id: /^\d+$/.test(id ?? '') ? Number(id) : null })
-      .catch(() => {});
+    /*
+     * O id vai como TEXTO.
+     *
+     * A coluna era bigint e os professores embutidos tem id em texto
+     * ('prof_matematica'), entao o teste numerico gravava null: escolher
+     * o professor de matematica nunca sobrevivia a um F5, e o aluno
+     * voltava para o Mentor geral sem entender por que. A migracao 012
+     * troca a coluna para text.
+     */
+    supabaseRepository.savePreferencias({ persona_ativa_id: id }).catch(() => {});
   },
   setShowPersonaManager: (v) => set({ showPersonaManager: v }),
   setApiKey: (key) => {

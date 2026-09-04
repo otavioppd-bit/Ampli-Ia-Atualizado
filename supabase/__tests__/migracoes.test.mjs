@@ -37,6 +37,8 @@ const ARQUIVOS = [
   '009_tarefa_idempotente.sql',
   '010_bemestar_marketplace_foco.sql',
   '011_bemestar_funcoes_rls.sql',
+  '012_persona_ativa_texto.sql',
+  '013_redacao_por_foto.sql',
 ];
 
 let db;
@@ -137,6 +139,60 @@ describe('estrutura', () => {
   it('o trigger de signup cria perfil para cada conta', async () => {
     const r = await db.query('select count(*)::int n from public.perfis');
     expect(r.rows[0].n).toBe(4);
+  });
+
+  it('a persona ativa cabe em texto (professores embutidos tem id nao-numerico)', async () => {
+    const r = await db.query(`
+      select data_type from information_schema.columns
+       where table_schema='public' and table_name='preferencias'
+         and column_name='persona_ativa_id'`);
+    expect(r.rows[0].data_type).toBe('text');
+
+    // O caso que o bigint quebrava: gravar 'prof_matematica'.
+    const [perfil] = (await db.query('select id from public.perfis limit 1')).rows;
+    await db.query(
+      `update public.preferencias set persona_ativa_id = 'prof_matematica' where user_id = $1`,
+      [perfil.id]);
+    const salvo = await db.query(
+      'select persona_ativa_id from public.preferencias where user_id = $1', [perfil.id]);
+    expect(salvo.rows[0].persona_ativa_id).toBe('prof_matematica');
+  });
+
+  it('redacoes ganha as colunas da correcao por foto', async () => {
+    const r = await db.query(`
+      select column_name, data_type from information_schema.columns
+       where table_schema='public' and table_name='redacoes'
+         and column_name in ('origem','imagem_path','transcricao','feedback_competencias')`);
+    const cols = Object.fromEntries(r.rows.map((x) => [x.column_name, x.data_type]));
+
+    expect(Object.keys(cols).sort()).toEqual(
+      ['feedback_competencias', 'imagem_path', 'origem', 'transcricao'],
+    );
+    expect(cols.feedback_competencias).toBe('jsonb');
+
+    // A mesma tabela guarda digitada e fotografada: e o que mantem o
+    // historico do aluno num lugar so.
+    const [perfil] = (await db.query('select id from public.perfis limit 1')).rows;
+    await db.query(`
+      insert into public.redacoes (user_id, tema, nota_final, competencia1, competencia2,
+        competencia3, competencia4, competencia5, origem, imagem_path, transcricao, feedback_competencias)
+      values ($1,'Inclusao digital',880,160,200,160,200,160,'foto','uid/x.jpg','texto',
+              '{"competence_1":{"score":160}}'::jsonb)`, [perfil.id]);
+
+    const salva = await db.query(
+      `select origem, feedback_competencias->'competence_1'->>'score' as c1
+         from public.redacoes where origem='foto'`);
+    expect(salva.rows[0]).toEqual({ origem: 'foto', c1: '160' });
+  });
+
+  it('recusa origem fora do dominio conhecido', async () => {
+    const [perfil] = (await db.query('select id from public.perfis limit 1')).rows;
+    await expect(
+      db.query(`
+        insert into public.redacoes (user_id, nota_final, competencia1, competencia2,
+          competencia3, competencia4, competencia5, origem)
+        values ($1, 500, 100, 100, 100, 100, 100, 'inventada')`, [perfil.id]),
+    ).rejects.toThrow();
   });
 
   it('traz o catalogo inicial de pilulas de audio', async () => {
